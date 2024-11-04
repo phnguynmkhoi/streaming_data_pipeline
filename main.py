@@ -23,8 +23,16 @@ def generate_transaction():
         'affiliateId': fake.uuid4()
     }
 
-def create_mongodb_client(hostname:str,username: str, password: str):
-    client = MongoClient(f'mongodb://{hostname}', authSource='admin')
-    db = client['admin']
-    db.authenticate(username, password)
+def mongodb_connection(hostname:str,username: str, password: str):
+    client = MongoClient(f'mongodb://{username}:{password}@{hostname}', authSource='admin')
     return client
+
+def insert_transaction(client, db_name, collection_name, transaction):
+    db = client[db_name]
+    collection = db[collection_name]
+    collection.insert_one(transaction)
+
+def main():
+    client = mongodb_connection('localhost:27017', 'admin', 'admin')
+    db_name = 'cdc'
+    collection_name = 'transactions'
