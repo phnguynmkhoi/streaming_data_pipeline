@@ -1,2 +1,4 @@
-pymongo
 faker
+mysql-connector-python
+sqlalchemy
+python-dotenv

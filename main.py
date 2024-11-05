@@ -1,38 +1,22 @@
-import faker
-from pymongo import MongoClient
+from sqlalchemy import create_engine, Column, Integer, String, UUID, Float
+from sqlalchemy.orm import declarative_base, sessionmaker
+
 from datetime import datetime
+from dotenv import load_dotenv
 import random
+import os
 
-fake = faker.Faker()
+load_dotenv()
 
-def generate_transaction():
-    user = fake.simple_profile()
+def mysql_session()
 
-    return {
-        "transactionId": fake.uuid4(),
-        "userId": user['username'],
-        "timestamp": datetime.now(datetime.timezone.utc).isoformat(),
-        "amount": round(random.uniform(10, 1000), 2),
-        "currency": random.choice(['USD', 'EUR', 'GBP']),
-        "city": fake.city(),
-        "country": fake.country(),
-        "merchantName": fake.company(),
-        "paymentMethod": random.choice(['Visa', 'Mastercard', 'Credit Card', 'Debit Card','Paypal']),
-        "ipAddress": fake.ipv4(),
-        "voucherCode": random.choice(["","DISCOUNT10","",""]),
-        'affiliateId': fake.uuid4()
-    }
-
-def mongodb_connection(hostname:str,username: str, password: str):
-    client = MongoClient(f'mongodb://{username}:{password}@{hostname}', authSource='admin')
-    return client
-
-def insert_transaction(client, db_name, collection_name, transaction):
+def insert_transaction(session, database, collection_name, transaction):
     db = client[db_name]
     collection = db[collection_name]
     collection.insert_one(transaction)
 
 def main():
-    client = mongodb_connection('localhost:27017', 'admin', 'admin')
-    db_name = 'cdc'
-    collection_name = 'transactions'
+    user = 
+    connection_string = 
+
+    Base = declarative_base()
