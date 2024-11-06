@@ -1,4 +1,4 @@
 faker
-mysql-connector-python
 sqlalchemy
 python-dotenv
+psycopg2

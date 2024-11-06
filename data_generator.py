@@ -1,4 +1,6 @@
 import faker
+import random
+from datetime import datetime
 
 fake = faker.Faker()
 
@@ -7,8 +9,8 @@ def generate_transaction():
 
     return {
         "transaction_id": fake.uuid4(),
-        "user_id": user['username'],
-        "timestamp": datetime.now(datetime.timezone.utc).isoformat(),
+        "user_id": fake.uuid4(),
+        "timestamp": datetime.now(),
         "amount": round(random.uniform(10, 1000), 2),
         "currency": random.choice(['USD', 'EUR', 'GBP']),
         "city": fake.city(),

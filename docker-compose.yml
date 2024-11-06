@@ -13,8 +13,9 @@ x-spark-worker-common:
   depends_on:
     - spark-master
   networks:
-    - change_data_capture
+    - cdc_network
 
+version: '3.8'
 
 services:
   zookeeper:
@@ -22,57 +23,47 @@ services:
     hostname: zookeeper
     container_name: zookeeper
     ports:
-      - "2181:2181"
+      - '2181:2181'
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo 'Welcome' | nc localhost 2181"]
+      test: echo srvr | nc zookeeper 2181 || exit 1
+      start_period: 10s
+      retries: 20
       interval: 10s
-      timeout: 5s
-      retries: 5
-    networks: 
-      - change_data_capture
+    networks:
+      - cdc_network
 
   broker:
-    image: confluentinc/cp-server:7.4.0
+    image: confluentinc/cp-kafka:7.4.0
     hostname: broker
     container_name: broker
-    depends_on:
-      zookeeper:
-        condition: service_healthy
     ports:
-      - "9092:9092"
-      - "9081:9081"
-      - "29092:29092"
-      - "9101:9101"
+      - '29092:29092'
+      - '9092:9092'
+      - '9101:9101'
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
-      KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schema-registry:8081
-      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: broker:29092
-      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
-      CONFLUENT_METRICS_ENABLE: 'false'
-      CONFLUENT_SUPPORT_CUSTOMER_ID: 'anonymous'
-    networks:
-      - change_data_capture
     healthcheck:
-      test: ["CMD", "bash", "-c", "nc -z localhost 9092"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-  
+      test: nc -z localhost 9092 || exit -1
+      start_period: 15s
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    networks:
+      - cdc_network
+
   control-center:
     image: confluentinc/cp-enterprise-control-center:7.4.0
     hostname: control-center
@@ -85,26 +76,25 @@ services:
     environment:
       CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker:29092'
       CONTROL_CENTER_REPLICATION_FACTOR: 1
-      CONTRON_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
       CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
       CONFLUENT_METRICS_TOPIC_REPLICATION: 1
-      CONFLUENT_METRICS_ENABLE: 'false'
+      CONFLIENT_METRICS_ENABLE: 'false'
       PORT: 9021
     networks:
-      - change_data_capture
+      - cdc_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9021"]
-      interval: 10s
-      timeout: 5s
+      test: [ "CMD", "curl", "-f", "http://localhost:9021/health" ]
+      interval: 30s
+      timeout: 10s
       retries: 5
-  
+
   debezium:
-    image: debezium/connect:1.7
-    restart: always
+    image: debezium/connect:2.7.3.Final
     container_name: debezium
     hostname: debezium
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       broker:
         condition: service_healthy
@@ -120,48 +110,51 @@ services:
       KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       ENABLE_DEBEZIUM_SCRIPTING: 'true'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test:
+        [ 'CMD', 'curl', '--silent', '--fail', '-X', 'GET', 'http://localhost:8083/connectors', ]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
-      - change_data_capture
-  
+      - cdc_network
+
   debezium-ui:
-    image: debezium/debezium-ui:1.7
-    restart: always
+    image: debezium/debezium-ui:latest
     container_name: debezium-ui
     hostname: debezium-ui
+    depends_on:
+      debezium:
+        condition: service_healthy
     ports:
       - '8080:8080'
     environment:
       KAFKA_CONNECT_URIS: http://debezium:8083
     networks:
-      - change_data_capture
-  
-  mysql:
-    image: mysql:8.0
-    container_name: mysql
-    hostname: mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: admin 
-      MYSQL_DATABASE: cdc       
-      MYSQL_USER: minhkhoi              
-      MYSQL_PASSWORD: minhkhoi       
+      - cdc_network
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    hostname: postgres
     ports:
-      - "3306:3306"                     
-    volumes:
-      - mysql_data:/var/lib/mysql 
-    networks:
-      - change_data_capture
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cdc_db
+    command: [ 'postgres', '-c', 'wal_level=logical' ]
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 30s                      
-      timeout: 10s                       
-      retries: 3                         
-      start_period: 30s
+      test: [ 'CMD', 'psql', '-U', 'postgres', '-c', 'SELECT 1' ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cdc_network
 
 networks:
-  change_data_capture:
-    name: change_data_capture
+  cdc_network:
+    name: cdc_network
     driver: bridge
-
-volumes:
-  mysql_data:
-    name: mysql_data
