@@ -61,7 +61,7 @@ if __name__=="__main__":
 
     postgres_session = create_session(host,port,username,password,db_name)
 
-    for i in range(5):
+    for i in range(50):
         transaction = generate_transaction()
         insert_transaction(postgres_session,transaction)
 

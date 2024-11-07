@@ -15,8 +15,6 @@ x-spark-worker-common:
   networks:
     - cdc_network
 
-version: '3.8'
-
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
