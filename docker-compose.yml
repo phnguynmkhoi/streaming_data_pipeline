@@ -13,7 +13,7 @@ x-spark-worker-common:
   depends_on:
     - spark-master
   networks:
-    - cdc_network
+    - streaming_data_network
 
 services:
   zookeeper:
@@ -31,7 +31,7 @@ services:
       retries: 20
       interval: 10s
     networks:
-      - cdc_network
+      - streaming_data_network
 
   broker:
     image: confluentinc/cp-kafka:7.4.0
@@ -41,6 +41,8 @@ services:
       - '29092:29092'
       - '9092:9092'
       - '9101:9101'
+    depends_on:
+      - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
@@ -60,7 +62,7 @@ services:
       timeout: 10s
       retries: 10
     networks:
-      - cdc_network
+      - streaming_data_network
 
   control-center:
     image: confluentinc/cp-enterprise-control-center:7.4.0
@@ -80,7 +82,7 @@ services:
       CONFLuENT_METRICS_ENABLE: 'true'
       PORT: 9021
     networks:
-      - cdc_network
+      - streaming_data_network
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9021/health" ]
       interval: 30s
@@ -117,7 +119,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - cdc_network
+      - streaming_data_network
 
   debezium-ui:
     image: debezium/debezium-ui:latest
@@ -131,7 +133,7 @@ services:
     environment:
       KAFKA_CONNECT_URIS: http://debezium:8083
     networks:
-      - cdc_network
+      - streaming_data_network
 
   postgres:
     image: postgres:latest
@@ -142,7 +144,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: cdc_db
+      POSTGRES_DB: transactions_db
     command: [ 'postgres', '-c', 'wal_level=logical' ]
     healthcheck:
       test: [ 'CMD', 'psql', '-U', 'postgres', '-c', 'SELECT 1' ]
@@ -150,7 +152,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - cdc_network
+      - streaming_data_network
     # volumes:
     #   - postgres_data:/var/lib/postgresql/data
 
@@ -167,7 +169,7 @@ services:
       - minio-volume:/data
     command: server /data --console-address ":9001"
     networks:
-      - cdc_network
+      - streaming_data_network
 
   spark-master:
     image: spark-cluster:3.1.3
@@ -177,13 +179,9 @@ services:
       - "7077:7077"
       - "4040-4060:4040-4060"
     volumes:
-      # - ./jars:/opt/spark/jars
       - ./apps:/opt/spark/spark-apps
     networks:
-      - cdc_network
-    # environment:
-      # - SPARK_LOCAL_IP=spark-master
-      # - SPARK_WORKLOAD=master
+      - streaming_data_network
 
   spark-worker-a:
     <<: *spark-common
@@ -191,9 +189,6 @@ services:
     ports:
       - "9091:8080"
       - "7000:7000"
-    # environment:
-      # - SPARK_LOCAL_IP=spark-worker-a 
-      # - SPARK_WORKLOAD=worker
   
   spark-worker-b:
     <<: *spark-common
@@ -207,6 +202,6 @@ volumes:
   # postgres_data:
 
 networks:
-  cdc_network:
-    name: cdc_network
+  streaming_data_network:
+    name: streaming_data_network
     driver: bridge

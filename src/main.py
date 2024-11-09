@@ -6,26 +6,34 @@ from data_generator import generate_transaction
 from dotenv import load_dotenv
 import os
 
-from sqlalchemy import Column, VARCHAR, Float, TIMESTAMP, UUID
+from sqlalchemy import Column, VARCHAR, Float, TIMESTAMP, UUID,CHAR, DATE, INTEGER
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
 class Transaction(Base):
-    __tablename__ = "transactions"    
+    __tablename__ = "ecommerce_transactions"    
 
     transaction_id = Column(UUID(), primary_key=True, nullable=False)
-    user_id = Column(UUID(),nullable=False)
-    timestamp = Column(TIMESTAMP(True))
-    amount = Column(Float())
-    currency = Column(VARCHAR(200))
-    city = Column(VARCHAR(200))
-    country = Column(VARCHAR(200))
-    merchant_name = Column(VARCHAR(200))
-    payment_method = Column(VARCHAR(200))
-    ip_address = Column(VARCHAR(200))
-    voucher_code = Column(VARCHAR(200))
-    affiliate_id = Column(UUID(),nullable=False)
+    name = Column(VARCHAR(50),nullable=False)
+    sex = Column(CHAR(1))
+    address = Column(VARCHAR(100))
+    phone_number = Column(VARCHAR(50))
+    birthdate = Column(TIMESTAMP)
+    email = Column(VARCHAR(50))
+    job = Column(VARCHAR(50))
+    product_name = Column(VARCHAR(50))
+    category = Column(VARCHAR(50))
+    unit_price = Column(Float)
+    quantity = Column(INTEGER)
+    merchant_name = Column(VARCHAR(50))
+    payment_method = Column(VARCHAR(50))
+    discount = Column(INTEGER)
+    shipping_address = Column(VARCHAR(100))
+    shipping_cost = Column(Float)
+    total = Column(Float)
+    currency = Column(VARCHAR(50))
+    created_at = Column(TIMESTAMP)
 
 def create_session(host, port, username, password, database):
     connection_string = f"postgresql://{username}:{password}@{host}:{port}/{database}"
@@ -57,7 +65,7 @@ if __name__=="__main__":
     password = os.getenv("POSTGRES_PASSWORD")
     host = "localhost"
     port = 5432
-    db_name = "cdc_db"
+    db_name = "transactions_db"
 
     postgres_session = create_session(host,port,username,password,db_name)
 

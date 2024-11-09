@@ -1,4 +1,6 @@
 faker
 sqlalchemy
 python-dotenv
-psycopg2
+psycopg2-binary
+faker-commerce
+pyspark
