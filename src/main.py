@@ -6,7 +6,7 @@ from data_generator import generate_transaction
 from dotenv import load_dotenv
 import os
 
-from sqlalchemy import Column, VARCHAR, Float, TIMESTAMP, UUID,CHAR, DATE, INTEGER
+from sqlalchemy import Column, VARCHAR, Float, TIMESTAMP, UUID,CHAR, INTEGER
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -19,7 +19,7 @@ class Transaction(Base):
     sex = Column(CHAR(1))
     address = Column(VARCHAR(100))
     phone_number = Column(VARCHAR(50))
-    birthdate = Column(TIMESTAMP)
+    birthdate = Column(VARCHAR(50))
     email = Column(VARCHAR(50))
     job = Column(VARCHAR(50))
     product_name = Column(VARCHAR(50))

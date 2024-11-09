@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
-from pyspark.sql.types import StructField,IntegerType,StringType,StructType,FloatType,TimestampType,MapType
+from pyspark.sql.types import StructField,IntegerType,StringType,StructType,FloatType,TimestampType
 
 data_schema = StructType([
     StructField("transaction_id",StringType()),
@@ -22,7 +22,7 @@ data_schema = StructType([
     StructField("shipping_cost",FloatType()),
     StructField("total",FloatType()),
     StructField("currency",StringType()),
-    StructField("created_at",StringType()),
+    StructField("created_at",TimestampType())
 ])
 
 MINIO_ACCESS_KEY = "vTx7ykoKSJj8lHRB8VUJ"
@@ -78,13 +78,13 @@ test_query = df.writeStream\
             .option("path", "file:///opt/spark/spark-apps/") \
             .outputMode("append") \
             .start()
-# # df.show()
-query = df.writeStream \
-    .format("parquet") \
-    .option("checkpointLocation", "s3a://transactions/checkpoints") \
-    .option("path", "s3a://transactions/data") \
-    .outputMode("append") \
-    .start()
+# df.show()
+# query = df.writeStream \
+#     .format("parquet") \
+#     .option("checkpointLocation", "s3a://transactions/checkpoints") \
+#     .option("path", "s3a://transactions/data") \
+#     .outputMode("append") \
+#     .start()
 
-query.awaitTermination()
+test_query.awaitTermination()
 
