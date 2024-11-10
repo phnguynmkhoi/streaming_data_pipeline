@@ -1,6 +1,7 @@
 import faker
 import random
 from datetime import datetime
+import uuid
 
 import faker_commerce
 
@@ -10,7 +11,7 @@ fake.add_provider(faker_commerce.Provider)
 def generate_transaction():
     user = fake.profile()
     transaction = {}
-    transaction["transaction_id"] = fake.uuid4(),
+    transaction["transaction_id"] = str(uuid.uuid4()),
     transaction["name"] = user["name"]
     transaction["sex"] = user["sex"]
     transaction["address"] = user["address"]
@@ -27,9 +28,9 @@ def generate_transaction():
     transaction["discount"] = random.choices([15,10,5,0],[0.05,0.05,0.1,0.8])[0]
     transaction["shipping_address"] = random.choices([user["address"],fake.address()],[0.9,0.1])[0]
     transaction["shipping_cost"] = round(random.uniform(0,30),2)
-    transaction["total"] = transaction["unit_price"]*transaction["quantity"]*(1-transaction["discount"]) + transaction["shipping_cost"]
+    transaction["total"] = transaction["unit_price"]*transaction["quantity"]*((100-transaction["discount"])/100) + transaction["shipping_cost"]
     transaction["currency"] = fake.currency_code()
-    transaction["created_at"] = datetime.now()
+    transaction["created_at"] = datetime.now().strftime("%y/%M/%d %H:%M:%S")
     
     return transaction
 
