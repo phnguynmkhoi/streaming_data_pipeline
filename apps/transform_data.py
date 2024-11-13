@@ -52,6 +52,12 @@ spark = SparkSession\
 # spark.sql("REFRESH TABLE dim_shipping")
 # spark.sql("REFRESH TABLE dim_product")
 # spark.sql("REFRESH TABLE fact_transactions")
+spark.catalog.refreshTable("dim_user")
+spark.catalog.refreshTable("dim_product")
+spark.catalog.refreshTable("dim_shipping")
+spark.catalog.refreshTable("dim_payment")
+spark.catalog.refreshTable("fact_transactions")
+
 
 user_schema = StructType([
     StructField("user_id",StringType()),

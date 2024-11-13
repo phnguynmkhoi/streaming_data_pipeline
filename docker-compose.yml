@@ -153,8 +153,8 @@ services:
       retries: 5
     networks:
       - streaming_data_network
-    # volumes:
-    #   - postgres_data:/var/lib/postgresql/data
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   minio:
     image: minio/minio:latest
@@ -199,7 +199,7 @@ services:
 
 volumes:
   minio-volume:
-  # postgres_data:
+  postgres_data:
 
 networks:
   streaming_data_network:

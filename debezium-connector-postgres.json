@@ -10,7 +10,7 @@
       "plugin.name": "pgoutput",
       "database.history.kafka.topic": "transactions",
       "auto.create.topics.enable": "true",
-      "table.include.list": "public.ecommerce_transactions",
+      "table.include.list": "public.transactions,public.users,public.payments,public.products",
       "database.port": "5432",
       "database.server.name": "transactions",
       "key.converter": "org.apache.kafka.connect.json.JsonConverter",
