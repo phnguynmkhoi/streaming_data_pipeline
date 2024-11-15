@@ -163,8 +163,8 @@ services:
       MINIO_ROOT_USER: minioadmin         # Default access key (change it)
       MINIO_ROOT_PASSWORD: minioadmin     # Default secret key (change it)
     ports:
-      - "10000:9000"   # MinIO API port
-      - "10001:9001"   # MinIO console port
+      - "9000:9000"   # MinIO API port
+      - "9001:9001"   # MinIO console port
     volumes:
       - minio-volume:/data
     command: server /data --console-address ":9001"
@@ -197,9 +197,85 @@ services:
       - "9093:8080"
       - "7001:7000"
 
+  mysql:
+    image: mysql:8
+    container_name: mysql
+    hostname: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: metastore
+      MYSQL_USER: hive
+      MYSQL_PASSWORD: hive
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - streaming_data_network
+
+  # Hive Metastore
+  hive-metastore:
+    build:
+      context: .
+      dockerfile: Dockerfile.hive
+    container_name: hive-metastore
+    hostname: hive-metastore
+    depends_on:
+      - mysql
+    environment:
+      DB_DRIVER: mysql
+      DB_HOST: mysql
+      DB_NAME: metastore
+      DB_USER: hive
+      DB_PASS: hive
+      HADOOP_HOME: /opt/hadoop
+      HIVE_HOME: /opt/hive
+      SERVICE_NAME: metastore
+      VERBOSE: true
+      IS_RESUME: true
+    volumes:
+      - ./conf/metastore-site.xml:/opt/hive/conf/metastore-site.xml
+      - ./conf/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+    ports:
+      - "9083:9083"
+    # command: /opt/hive/bin/schematool -dbType mysql -initSchema && /opt/hive/bin/hive --service metastore
+    networks:
+      - streaming_data_network
+
+  # HiveServer2
+  hiveserver2:
+    container_name: hiveserver2
+    hostname: hiveserver2
+    build:
+      context: .
+      dockerfile: Dockerfile.hive
+    depends_on:
+      - hive-metastore
+    environment:
+      HADOOP_HOME: /opt/hadoop
+      HIVE_HOME: /opt/hive
+      SERVICE_NAME: hiveserver2
+      SKIP_SCHEMA_INIT: true
+      IS_RESUME: true
+      HIVE_SERVER2_THRIFT_BIND_HOST: 0.0.0.0
+    volumes:
+      - ./conf/hive-site.xml:/opt/hive/conf/hive-site.xml
+      - ./conf/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+    # command: /opt/hive/bin/hiveserver2
+    networks:
+      - streaming_data_network
+
+
 volumes:
   minio-volume:
   postgres_data:
+  mysql_data:
 
 networks:
   streaming_data_network:
