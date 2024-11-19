@@ -1,12 +1,14 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, when,udf, lit, from_json
+from pyspark.sql.functions import col, when,udf, lit, from_json, to_timestamp, to_date
 from pyspark.sql.types import StructField,IntegerType,StringType,StructType,FloatType
 import datetime
 import uuid
 
+today = datetime.datetime.now().strftime("%y%m%d")
+
 def get_full_datamart(datamart, schema):
     try:
-        df = spark.read.parquet(f"s3a://transactions/warehouse/{datamart}")
+        df = spark.read.parquet(f"s3a://transactions/{today}/{datamart}")
     except:
         df = spark.createDataFrame([],schema=schema)
     return df
@@ -30,29 +32,52 @@ def insert_new_data_into_datamart(new_data_df, datamart, schema, table_id_name):
     return updated_data_df
 
 def write_dim_data(df, datamart):
-    return df.writeStream.mode("overwrite").parquet(f"s3a://transactions/warehouse/{datamart}")
+    return df.writeStream\
+            .format("parquet")\
+            .option("path",f"s3a://transactions/{today}/{datamart}")\
+            .option("checkpointLocation",f"s3a://checkpoints/{datamart}")\
+            .start()
 
-data_schema = StructType([
+transaction_schema = StructType([
     StructField("transaction_id",StringType()),
-    StructField("name",StringType()),
-    StructField("sex",StringType()),
-    StructField("address",StringType()),
-    StructField("phone_number",StringType()),
-    StructField("birthdate",StringType()),
-    StructField("email",StringType()),
-    StructField("job",StringType()),
-    StructField("product_name",StringType()),
-    StructField("category",StringType()),
-    StructField("unit_price",FloatType()),
+    StructField("user_id",StringType()),
+    StructField("product_id",StringType()),
+    StructField("payment_id",StringType()),
     StructField("quantity",IntegerType()),
-    StructField("merchant_name",StringType()),
-    StructField("payment_method",StringType()),
     StructField("discount",IntegerType()),
     StructField("shipping_address",StringType()),
     StructField("shipping_cost",FloatType()),
-    StructField("total",FloatType()),
+    StructField("created_at",StringType()),
+    StructField("status",StringType()),
+])
+
+user_schema = StructType([
+    StructField("user_id",StringType()),
+    StructField("full_name",StringType()),
+    StructField("phone_number",StringType()),
+    StructField("sex",StringType()),
+    StructField("address",StringType()),
+    StructField("birthdate",StringType()),
+    StructField("email",StringType()),
+    StructField("job",StringType()),
+    StructField("status", StringType())
+])
+
+product_schema = StructType([
+    StructField("product_id",StringType()),
+    StructField("product_name",StringType()),
+    StructField("category",StringType()),
+    StructField("unit_price",FloatType()),
+    StructField("merchant_name",StringType()),
+    StructField("rating", FloatType()),
+    StructField("status",StringType())
+])
+
+payment_schema = StructType([
+    StructField("payment_id",StringType()),
+    StructField("payment_method",StringType()),
     StructField("currency",StringType()),
-    StructField("created_at",StringType())
+    StructField("status", StringType())
 ])
 
 MINIO_ACCESS_KEY = "vTx7ykoKSJj8lHRB8VUJ"
@@ -67,6 +92,9 @@ spark = SparkSession\
         .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
         .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
         .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+        .config("spark.sql.catalogImplementation", "hive") \
+        .config("hive.metastore.uris", "thrift://hive-metastore:9083") \
+        .enableHiveSupport() \
         .getOrCreate()
 
 streaming_schema = StructType([
@@ -75,90 +103,65 @@ streaming_schema = StructType([
     ]))
 ])
 
-df = spark.readStream\
+user_df = spark.readStream\
     .format("kafka")\
     .option("kafka.bootstrap.servers", "broker:29092") \
-    .option("subscribe", "transactions_streaming.public.ecommerce_transactions") \
+    .option("subscribe", "transactions_streaming.public.users") \
     .option("startingOffsets", "earliest") \
-    .load()
+    .load()\
+    .selectExpr("CAST(value AS STRING) as value")\
+    .select(from_json(col("value"),streaming_schema).alias("value"))\
+    .select("value.payload.after")\
+    .select(from_json(col("after"),user_schema).alias("data"))\
+    .selectExpr("data.*")
 
-df = df.selectExpr("CAST(value AS STRING) as value")\
-        .select(from_json(col("value"),streaming_schema).alias("value"))\
-        .select("value.payload.after")\
-        .select(from_json(col("after"),data_schema).alias("data"))\
-        .selectExpr("data.*")
+product_df = spark.readStream\
+    .format("kafka")\
+    .option("kafka.bootstrap.servers", "broker:29092") \
+    .option("subscribe", "transactions_streaming.public.products") \
+    .option("startingOffsets", "earliest") \
+    .load()\
+    .selectExpr("CAST(value AS STRING) as value")\
+    .select(from_json(col("value"),streaming_schema).alias("value"))\
+    .select("value.payload.after")\
+    .select(from_json(col("after"),product_schema).alias("data"))\
+    .selectExpr("data.*")
 
-today = datetime.datetime.today().strftime("%y%m%d")
-query = df.writeStream \
-    .format("parquet") \
-    .option("checkpointLocation", f"s3a://transactions/checkpoints/{today}") \
-    .option("path", f"s3a://transactions/{today}") \
-    .outputMode("append") \
-    .start()
+payment_df = spark.readStream\
+    .format("kafka")\
+    .option("kafka.bootstrap.servers", "broker:29092") \
+    .option("subscribe", "transactions_streaming.public.payments") \
+    .option("startingOffsets", "earliest") \
+    .load()\
+    .selectExpr("CAST(value AS STRING) as value")\
+    .select(from_json(col("value"),streaming_schema).alias("value"))\
+    .select("value.payload.after")\
+    .select(from_json(col("after"),payment_schema).alias("data"))\
+    .selectExpr("data.*")
 
+transaction_df = spark.readStream\
+    .format("kafka")\
+    .option("kafka.bootstrap.servers", "broker:29092") \
+    .option("subscribe", "transactions_streaming.public.transactions") \
+    .option("startingOffsets", "earliest") \
+    .load()\
+    .selectExpr("CAST(value AS STRING) as value")\
+    .select(from_json(col("value"),streaming_schema).alias("value"))\
+    .select("value.payload.after")\
+    .select(from_json(col("after"),transaction_schema).alias("data"))\
+    .selectExpr("data.*")
 
+transaction_df = transaction_df.withColumn("created_ts", to_timestamp(col("created_at")))
+transaction_df = transaction_df.withColumn("created_date", to_date(col("created_at")))
 
-user_schema = StructType([
-    StructField("user_id",StringType()),
-    StructField("full_name",StringType()),
-    StructField("phone_number",StringType()),
-    StructField("sex",StringType()),
-    StructField("address",StringType()),
-    StructField("birthdate",StringType()),
-    StructField("email",StringType()),
-    StructField("job",StringType()),
-])
-
-product_schema = StructType([
-    StructField("product_id",StringType()),
-    StructField("product_name",StringType()),
-    StructField("category",StringType()),
-    StructField("unit_price",FloatType()),
-    StructField("merchant_name",StringType()),
-])
-
-payment_schema = StructType([
-    StructField("payment_id",StringType()),
-    StructField("payment_method",StringType()),
-    StructField("currency",StringType()),
-])
-
-shipping_schema = StructType([
-    StructField("shipping_id",StringType()),
-    StructField("shipping_address",StringType()),
-])
-
-today = datetime.datetime.now().strftime("%y%m%d")
-# df = spark.read.parquet(f"s3a://transactions/{today}")
-
-user_df = df\
-        .select(["name","sex","address","phone_number","birthdate","email","job"])\
-        .withColumnRenamed("name", "full_name").distinct()
-
-product_df = df\
-            .select(["product_name","category","unit_price","merchant_name"]).distinct()
-
-payment_df = df.select(["payment_method", "currency"]).distinct()
-
-shipping_df = df.select(["shipping_address"]).distinct()
-
-user_df = insert_new_data_into_datamart(user_df,"dim_user",user_schema,"user_id")
-product_df = insert_new_data_into_datamart(product_df,"dim_product",product_schema,"product_id")
-payment_df = insert_new_data_into_datamart(payment_df,"dim_payment",payment_schema,"payment_id")
-shipping_df = insert_new_data_into_datamart(shipping_df,"dim_shipping",shipping_schema,"shipping_id")
-
-transaction_df = df.withColumnRenamed("name","full_name")\
-                .join(user_df,on=["full_name","sex","address","phone_number","birthdate","email","job"],how="inner")\
-                .join(product_df,on=["product_name","category","unit_price","merchant_name"],how="inner")\
-                .join(payment_df, on=["payment_method", "currency"], how="inner")\
-                .join(shipping_df, on=["shipping_address"], how="inner")\
-                .select(["transaction_id","user_id","product_id","payment_id","shipping_id","quantity","discount","shipping_cost","total","created_at"])
-
-# user_df.printSchema()
-query1 = write_dim_data(user_df,"dim_user")
-query2 = write_dim_data(product_df,"dim_product")
-query3 = write_dim_data(payment_df,"dim_payment")
-query4 = write_dim_data(shipping_df,"dim_shipping")
-query5 = transaction_df.write.mode("append").parquet(f"s3a://transactions/warehouse/fact_transactions")
+query1 = write_dim_data(user_df,"users")
+query2 = write_dim_data(product_df,"products")
+query3 = write_dim_data(payment_df,"payments")
+query5 = transaction_df.writeStream\
+            .format("parquet")\
+            .option("path",f"s3a://transactions/{today}/transactions")\
+            .option("checkpointLocation",f"s3a://checkpoints/transactions")\
+            .outputMode("append")\
+            .start()
 
 query5.awaitTermination()

@@ -1,51 +1,68 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <configuration>
+    <property>
+        <name>javax.jdo.option.ConnectionDriverName</name>
+        <value>com.mysql.cj.jdbc.Driver</value>
+    </property>
+    <property>
+      <name>javax.jdo.option.ConnectionURL</name>
+      <value>jdbc:mysql://mysql:3306/metastore?createDatabaseIfNotExist=true&amp;allowPublicKeyRetrieval=true&amp;useSSL=false</value>
+      <description>metadata is stored in a MySQL server</description>
+   </property>
+    <property>
+        <name>javax.jdo.option.ConnectionUserName</name>
+        <value>hive</value>
+    </property>
+    <property>
+        <name>javax.jdo.option.ConnectionPassword</name>
+        <value>hive</value>
+    </property>
+
+    <!-- Metastore Connection -->
+    <property>
+        <name>hive.metastore.uris</name>
+        <value>thrift://hive-metastore:9083</value>
+    </property>
+
+    <!-- Storage Configuration -->
+    <property>
+        <name>hive.metastore.warehouse.dir</name>
+        <value>s3a://transactions-warehouse/</value>
+    </property>
+    <property>
+        <name>fs.s3a.endpoint</name>
+        <value>http://minio:9000</value>
+    </property>
+    <property>
+        <name>fs.s3a.access.key</name>
+        <value>vTx7ykoKSJj8lHRB8VUJ</value>
+    </property>
+    <property>
+        <name>fs.s3a.secret.key</name>
+        <value>tl6sujLw3xTY8IFUe5dsy44VDCXzMiosZHM4wEVa</value>
+    </property>
+    <property>
+        <name>fs.s3a.path.style.access</name>
+        <value>true</value>
+    </property>
+    <property>
+        <name>fs.s3a.impl</name>
+        <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+    </property>
+
+    <!-- HiveServer2 Configuration -->
+    <property>
+        <name>hive.server2.thrift.bind.host</name>
+        <value>0.0.0.0</value>
+    </property>
+
     <property>
         <name>hive.server2.thrift.port</name>
         <value>10000</value>
     </property>
     <property>
-        <name>hive.server2.thrift.http.port</name>
-        <value>10001</value>
-    </property>
-    <property>
-        <name>hive.server2.webui.port</name>
-        <value>10002</value>
-    </property>
-    <property>
-        <name>hive.server2.thrift.bind.host</name>
-        <value>0.0.0.0</value>
-    </property>
-    
-    <property>
-        <name>hive.server2.authentication</name>
-        <value>NONE</value>
-    </property>
-    <property>
         <name>hive.server2.enable.doAs</name>
         <value>false</value>
     </property>
-    
-    <!-- Enable both binary and HTTP transport -->
-    <property>
-        <name>hive.server2.use.SSL</name>
-        <value>false</value>
-    </property>
-    <property>
-        <name>hive.server2.thrift.http.path</name>
-        <value>cliservice</value>
-    </property>
-    <property>
-        <name>hive.metastore.uris</name>
-        <value>thrift://hive-metastore:9083</value>
-    </property>
-    <property>
-        <name>hive.metastore.warehouse.dir</name>
-        <value>s3a://transactions-warehouse/warehouse/</value>
-    </property>
-    <property>
-        <name>hive.execution.engine</name>
-        <value>spark</value>
-    </property>
+
 </configuration>
