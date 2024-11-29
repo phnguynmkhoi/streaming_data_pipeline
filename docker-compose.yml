@@ -163,8 +163,8 @@ services:
       MINIO_ROOT_USER: minioadmin         # Default access key (change it)
       MINIO_ROOT_PASSWORD: minioadmin     # Default secret key (change it)
     ports:
-      - "9000:9000"   # MinIO API port
-      - "9001:9001"   # MinIO console port
+      - "10000:9000"   # MinIO API port
+      - "10001:9001"   # MinIO console port
     volumes:
       - minio-volume:/data
     command: server /data --console-address ":9001"
@@ -196,95 +196,157 @@ services:
     ports:
       - "9093:8080"
       - "7001:7000"
-
-  mysql:
-    image: mysql:8
-    container_name: mysql
-    hostname: mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: metastore
-      MYSQL_USER: hive
-      MYSQL_PASSWORD: hive
-    volumes:
-      - mysql_data:/var/lib/mysql
+  
+  pinot-controller:
+    image: apachepinot/pinot
+    command: "StartController -zkAddress zookeeper:2181"
+    container_name: "pinot-controller"
+    restart: unless-stopped
     ports:
-      - '3306:3306'
+      - "9000:9000"
+    environment:
+      JAVA_OPTS: "-Dplugins.dir=/opt/pinot/plugins -Xms1G -Xmx4G -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Xloggc:gc-pinot-controller.log"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    networks:
+      - streamingnetwork
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
-    networks:
-      - streamingnetwork
+      start_period: 10s
 
-  # Hive Metastore
-  hive-metastore:
-    build:
-      context: .
-      dockerfile: Dockerfile.hive
-    container_name: hive-metastore
-    hostname: hive-metastore
-    depends_on:
-      - mysql
-    environment:
-      DB_DRIVER: mysql
-      DB_HOST: mysql
-      DB_NAME: metastore
-      DB_USER: hive
-      DB_PASS: hive
-      HADOOP_HOME: /opt/hadoop
-      HIVE_HOME: /opt/hive
-      SERVICE_NAME: metastore
-      VERBOSE: true
-      SKIP_SCHEMA_INIT: true
-      IS_RESUME: true
-    volumes:
-      - ./jars/hadoop-aws-3.2.0.jar:/opt/hive/lib/hadoop-aws-3.2.0.jar
-      - ./jars/aws-java-sdk-bundle-1.11.375.jar:/opt/hive/lib/aws-java-sdk-bundle-1.11.375.jar
-      - ./conf/hive-site.xml:/opt/hive/conf/hive-site.xml
-      # - ./conf/metastore-site.xml:/opt/hive/conf/metastore-site.xml
-      # - ./conf/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+  pinot-broker:
+    image: apachepinot/pinot
+    command: "StartBroker -zkAddress zookeeper:2181"
+    container_name: "pinot-broker"
+    restart: unless-stopped
     ports:
-      - "9083:9083"
-    # command: /opt/hive/bin/schematool -dbType mysql -initSchema && /opt/hive/bin/hive --service metastore
+      - "8099:8099"
+    environment:
+      JAVA_OPTS: "-Dplugins.dir=/opt/pinot/plugins -Xms4G -Xmx4G -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Xloggc:gc-pinot-broker.log"
+    depends_on:
+      pinot-controller:
+        condition: service_healthy
     networks:
       - streamingnetwork
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8099/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
 
-  # HiveServer2
-  hiveserver2:
-    container_name: hiveserver2
-    hostname: hiveserver2
-    build:
-      context: .
-      dockerfile: Dockerfile.hive
-    depends_on:
-      - hive-metastore
-    environment:
-      HADOOP_HOME: /opt/hadoop
-      HIVE_HOME: /opt/hive
-      SERVICE_NAME: hiveserver2
-      IS_RESUME: true
-      SKIP_SCHEMA_INIT: true
-    volumes:
-      - ./jars/hadoop-aws-3.2.0.jar:/opt/hive/lib/hadoop-aws-3.2.0.jar
-      - ./jars/aws-java-sdk-bundle-1.11.375.jar:/opt/hive/lib/aws-java-sdk-bundle-1.11.375.jar
-      - ./conf/hive-site.xml:/opt/hive/conf/hive-site.xml
-      # - ./conf/metastore-site.xml:/opt/hive/conf/metastore-site.xml
-      # - ./conf/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+  pinot-server:
+    image: apachepinot/pinot 
+    command: "StartServer -zkAddress zookeeper:2181"
+    container_name: "pinot-server"
+    restart: unless-stopped
     ports:
-      - "10000:10000"
-      - "10002:10002"
-    # command: /opt/hive/bin/hiveserver2
+      - "8098:8098"
+    environment:
+      JAVA_OPTS: "-Dplugins.dir=/opt/pinot/plugins -Xms4G -Xmx16G -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Xloggc:gc-pinot-server.log"
+    depends_on:
+      pinot-broker:
+        condition: service_healthy
     networks:
       - streamingnetwork
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8097/health/readiness || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+  # mysql:
+  #   image: mysql:8
+  #   container_name: mysql
+  #   hostname: mysql
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: root
+  #     MYSQL_DATABASE: metastore
+  #     MYSQL_USER: hive
+  #     MYSQL_PASSWORD: hive
+  #   volumes:
+  #     - mysql_data:/var/lib/mysql
+  #   ports:
+  #     - '3306:3306'
+  #   healthcheck:
+  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #   networks:
+  #     - streamingnetwork
+
+  # # Hive Metastore
+  # hive-metastore:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.hive
+  #   container_name: hive-metastore
+  #   hostname: hive-metastore
+  #   depends_on:
+  #     - mysql
+  #   environment:
+  #     DB_DRIVER: mysql
+  #     DB_HOST: mysql
+  #     DB_NAME: metastore
+  #     DB_USER: hive
+  #     DB_PASS: hive
+  #     HADOOP_HOME: /opt/hadoop
+  #     HIVE_HOME: /opt/hive
+  #     SERVICE_NAME: metastore
+  #     VERBOSE: true
+  #     SKIP_SCHEMA_INIT: true
+  #     IS_RESUME: true
+  #   volumes:
+  #     - ./jars/hadoop-aws-3.2.0.jar:/opt/hive/lib/hadoop-aws-3.2.0.jar
+  #     - ./jars/aws-java-sdk-bundle-1.11.375.jar:/opt/hive/lib/aws-java-sdk-bundle-1.11.375.jar
+  #     - ./conf/hive-site.xml:/opt/hive/conf/hive-site.xml
+  #     # - ./conf/metastore-site.xml:/opt/hive/conf/metastore-site.xml
+  #     # - ./conf/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+  #   ports:
+  #     - "9083:9083"
+  #   # command: /opt/hive/bin/schematool -dbType mysql -initSchema && /opt/hive/bin/hive --service metastore
+  #   networks:
+  #     - streamingnetwork
+
+  # # HiveServer2
+  # hiveserver2:
+  #   container_name: hiveserver2
+  #   hostname: hiveserver2
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.hive
+  #   depends_on:
+  #     - hive-metastore
+  #   environment:
+  #     HADOOP_HOME: /opt/hadoop
+  #     HIVE_HOME: /opt/hive
+  #     SERVICE_NAME: hiveserver2
+  #     IS_RESUME: true
+  #     SKIP_SCHEMA_INIT: true
+  #   volumes:
+  #     - ./jars/hadoop-aws-3.2.0.jar:/opt/hive/lib/hadoop-aws-3.2.0.jar
+  #     - ./jars/aws-java-sdk-bundle-1.11.375.jar:/opt/hive/lib/aws-java-sdk-bundle-1.11.375.jar
+  #     - ./conf/hive-site.xml:/opt/hive/conf/hive-site.xml
+  #     # - ./conf/metastore-site.xml:/opt/hive/conf/metastore-site.xml
+  #     # - ./conf/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+  #   ports:
+  #     - "10000:10000"
+  #     - "10002:10002"
+  #   # command: /opt/hive/bin/hiveserver2
+  #   networks:
+  #     - streamingnetwork
 
 
 volumes:
   minio-volume:
   postgres_data:
-  mysql_data:
-   name: mysql_data
+  # mysql_data:
+  #  name: mysql_data
 
 networks:
   streamingnetwork:

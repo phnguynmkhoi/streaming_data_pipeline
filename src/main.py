@@ -148,7 +148,7 @@ for i in range(TRANSACTION_LENGTH):
     transaction["discount"] = random.choices([15,10,5,0],[0.05,0.05,0.1,0.8])[0]
     transaction["shipping_address"] = random.choices([user["address"],fake.address()],[0.9,0.1])[0]
     transaction["shipping_cost"] = round(random.uniform(0,30),2)
-    transaction["created_at"] = datetime.now().strftime("%y-%M-%d %H:%M:%S")
+    transaction["created_at"] = datetime.now().strftime("%y-%m-%d %H:%M:%S")
     transaction["status"] = "INSERT"
 
     insert_data(postgres_session, Transaction, transaction)

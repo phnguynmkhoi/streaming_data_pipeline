@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, when,udf, lit, from_json, to_timestamp, to_date
+from pyspark.sql.functions import col, when,udf, lit, from_json, to_timestamp, to_date, struct, to_json
 from pyspark.sql.types import StructField,IntegerType,StringType,StructType,FloatType
 import datetime
 import uuid
@@ -34,7 +34,7 @@ def insert_new_data_into_datamart(new_data_df, datamart, schema, table_id_name):
 def write_dim_data(df, datamart):
     return df.writeStream\
             .format("parquet")\
-            .option("path",f"s3a://transactions/{today}/{datamart}")\
+            .option("path",f"s3a://transactions/{datamart}")\
             .option("checkpointLocation",f"s3a://checkpoints/{datamart}")\
             .start()
 
@@ -154,14 +154,31 @@ transaction_df = spark.readStream\
 transaction_df = transaction_df.withColumn("created_ts", to_timestamp(col("created_at")))
 transaction_df = transaction_df.withColumn("created_date", to_date(col("created_at")))
 
+def write_to_kafka(df, name):
+    return df\
+            .selectExpr("to_json(struct(*)) AS value")\
+            .writeStream\
+            .format("kafka")\
+            .option("kafka.bootstrap.servers", "broker:29092") \
+            .option("topic", f"streaming_{name}") \
+            .option("checkpointLocation", f"s3a://checkpoints/kafka/{name}")\
+            .start()
+
+query5 = write_to_kafka(user_df,"users")
+query6 = write_to_kafka(product_df,"products")
+query7 = write_to_kafka(payment_df,"payments")
+query8 = write_to_kafka(transaction_df,"transactions")
+
 query1 = write_dim_data(user_df,"users")
 query2 = write_dim_data(product_df,"products")
 query3 = write_dim_data(payment_df,"payments")
-query5 = transaction_df.writeStream\
+query4 = transaction_df.writeStream\
             .format("parquet")\
-            .option("path",f"s3a://transactions/{today}/transactions")\
+            .option("path",f"s3a://transactions/transactions")\
             .option("checkpointLocation",f"s3a://checkpoints/transactions")\
             .outputMode("append")\
             .start()
 
-query5.awaitTermination()
+query8.awaitTermination()
+
+query4.awaitTermination()

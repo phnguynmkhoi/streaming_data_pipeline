@@ -1,0 +1,46 @@
+{
+    "schemaName": "users",
+    "dimensionFieldSpecs": [
+      {
+        "name": "user_id",
+        "dataType": "STRING"
+      },
+      {
+        "name": "full_name",
+        "dataType": "STRING"
+      },
+      {
+        "name": "phone_number",
+        "dataType": "STRING"
+      },
+      {
+        "name": "sex",
+        "dataType": "STRING"
+      },
+      {
+        "name": "address",
+        "dataType": "STRING"
+      },
+      {
+        "name": "email",
+        "dataType": "STRING"
+      },
+      {
+        "name": "job",
+        "dataType": "STRING"
+      },
+      {
+        "name": "status",
+        "dataType": "STRING"
+      }
+    ],
+    "metricFieldSpecs": [],
+    "dateTimeFieldSpecs": [
+      {
+        "name": "birthdate",
+        "dataType": "STRING",
+        "format": "1:DAYS:SIMPLE_DATE_FORMAT:yy-MM-dd",
+        "granularity": "1:DAYS"
+      }
+    ]
+  }

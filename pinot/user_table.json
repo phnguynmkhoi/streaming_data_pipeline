@@ -1,0 +1,31 @@
+{
+    "tableName": "transcript",
+    "tableType": "OFFLINE",
+    "segmentsConfig": {
+      "replication": 1
+    },
+    "tenants": {
+      "broker":"DefaultTenant",
+      "server":"DefaultTenant"
+    },
+    "tableIndexConfig": {
+      "loadMode": "MMAP",
+      "batchConfigs":{
+        "inputFormat":"json",
+        "input.fs.className":"org.apache.pinot.plugin.filesystem.S3PinotFS",
+        "input.fs.prop.region":"us-central",
+        "input.fs.prop.accessKey":"foo",
+        "input.fs.prop.secretKey":"bar"
+      }
+    },
+    "ingestionConfig": {
+      "batchIngestionConfig": {
+        "segmentIngestionType": "APPEND",
+        "segmentIngestionFrequency": "HOURLY"
+      },
+      "continueOnError": true,
+      "rowTimeValueCheck": true,
+      "segmentTimeValueCheck": false
+    },
+    "metadata": {}
+  }
