@@ -30,6 +30,7 @@ class User(Base):
     birthdate = Column(VARCHAR(100))
     email = Column(VARCHAR(100))
     job = Column(VARCHAR(100))
+    last_modified_ts = Column(VARCHAR(100))
     status = Column(VARCHAR(50))
 
 class Product(Base):
@@ -41,6 +42,7 @@ class Product(Base):
     unit_price = Column(Float)
     merchant_name = Column(VARCHAR(100))
     rating = Column(Float)
+    last_modified_ts = Column(VARCHAR(100))
     status = Column(VARCHAR(50))
 
 class Payment(Base):
@@ -49,6 +51,17 @@ class Payment(Base):
     payment_id = Column(UUID(),primary_key=True)
     payment_method = Column(VARCHAR(100))
     currency = Column(VARCHAR(10))
+    last_modified_ts = Column(VARCHAR(100))
+    status = Column(VARCHAR(50))
+
+class Shipping(Base):
+    __tablename__ = "shippings"
+
+    shipping_id = Column(UUID(), primary_key=True)
+    shipping_address = Column(VARCHAR(200))
+    shipping_cost = Column(Float)
+    shipping_status = Column(VARCHAR(50))
+    last_modified_ts = Column(VARCHAR(100))
     status = Column(VARCHAR(50))
 
 class Transaction(Base):
@@ -58,13 +71,10 @@ class Transaction(Base):
     user_id = Column(UUID())
     product_id = Column(UUID())
     payment_id = Column(UUID())
+    shipping_id = Column(UUID())
     quantity = Column(INTEGER)
-    payment_method = Column(VARCHAR(100))
     discount = Column(INTEGER)
-    shipping_address = Column(VARCHAR(100))
-    shipping_cost = Column(Float)
-    total = Column(Float)
-    created_at = Column(VARCHAR(100))
+    last_modified_ts = Column(VARCHAR(100))
     status = Column(VARCHAR(50))
 
 def create_session(host, port, username, password, database):
@@ -105,16 +115,18 @@ users = []
 products = []
 payments = []
 
-USER_LENGTH = 1000
-PRODUCT_LENGTH = 100
+USER_LENGTH = 100
+PRODUCT_LENGTH = 50
 
 for i in range(USER_LENGTH):
     user = data_generator.generate_user()
+    user["last_modified_ts"] = str(datetime.now())
     users.append(user)
     insert_data(postgres_session, User, user)
 
 for i in range(PRODUCT_LENGTH):
     product = data_generator.generate_product()
+    product["last_modified_ts"] = str(datetime.now())
     products.append(product)
     insert_data(postgres_session, Product, product)
 
@@ -124,7 +136,7 @@ for i in range(PAYMENT_LENGTH):
     payment["payment_method"] = random.choice(['Visa', 'Mastercard', 'Credit Card', 'Debit Card','Paypal'])
     payment["currency"] = fake.currency_code()
     payment["status"] = "INSERT"
-
+    payment["last_modified_ts"] = str(datetime.now())
     if payment not in payments:
         payments.append(payment)
 
@@ -133,9 +145,10 @@ for i in range(len(payments)):
 
     insert_data(postgres_session, Payment, payments[i])
 
-TRANSACTION_LENGTH = 10000
+TRANSACTION_LENGTH = 1000
 for i in range(TRANSACTION_LENGTH):
     transaction = {}
+    shipping = {}
     user = users[random.randint(0,USER_LENGTH-1)]
     product_id = products[random.randint(0,PRODUCT_LENGTH-1)]["product_id"]
     payment_id = payments[random.randint(0,len(payments)-1)]["payment_id"]
@@ -146,10 +159,19 @@ for i in range(TRANSACTION_LENGTH):
     transaction["payment_id"] = payment_id
     transaction["quantity"] = random.randint(1,10)
     transaction["discount"] = random.choices([15,10,5,0],[0.05,0.05,0.1,0.8])[0]
-    transaction["shipping_address"] = random.choices([user["address"],fake.address()],[0.9,0.1])[0]
-    transaction["shipping_cost"] = round(random.uniform(0,30),2)
-    transaction["created_at"] = datetime.now().strftime("%y-%m-%d %H:%M:%S")
+    transaction["last_modified_ts"] = str(datetime.now())
     transaction["status"] = "INSERT"
+    
+    shipping_id = str(uuid.uuid4())
+    transaction["shipping_id"] = shipping_id
+
+    shipping["shipping_id"] = shipping_id
+    shipping["shipping_address"] = random.choices([user["address"],fake.address()],[0.9,0.1])[0]
+    shipping["shipping_cost"] = round(random.uniform(0,30),2)
+    shipping["shipping_status"] = random.choices(["In-Transit","Delay","Shipped","Out-for-delivery","Delivered"])[0]
+    shipping["last_modified_ts"] = str(datetime.now())
+    shipping["status"] = "INSERT"
 
     insert_data(postgres_session, Transaction, transaction)
+    insert_data(postgres_session, Shipping, shipping)
 postgres_session.close()
