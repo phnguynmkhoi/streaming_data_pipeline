@@ -1,32 +1,16 @@
 {
-    "schemaName": "users",
+    "schemaName": "payments",
     "dimensionFieldSpecs": [
       {
-        "name": "user_id",
+        "name": "payment_id",
         "dataType": "STRING"
       },
       {
-        "name": "full_name",
+        "name": "payment_method",
         "dataType": "STRING"
       },
       {
-        "name": "phone_number",
-        "dataType": "STRING"
-      },
-      {
-        "name": "sex",
-        "dataType": "STRING"
-      },
-      {
-        "name": "address",
-        "dataType": "STRING"
-      },
-      {
-        "name": "email",
-        "dataType": "STRING"
-      },
-      {
-        "name": "job",
+        "name": "currency",
         "dataType": "STRING"
       },
       {
@@ -36,12 +20,6 @@
     ],
     "metricFieldSpecs": [],
     "dateTimeFieldSpecs": [
-      {
-        "name": "birthdate",
-        "dataType": "STRING",
-        "format": "1:DAYS:SIMPLE_DATE_FORMAT:yy-MM-dd",
-        "granularity": "1:DAYS"
-      },
       {
         "name": "last_modified_ts",
         "dataType": "STRING",
@@ -55,5 +33,6 @@
         "granularity": "1:DAYS"
       }
     ],
-    "primaryKeyColumns": ["user_id"]
+    "primaryKeyColumns": ["payment_id"]
   }
+  

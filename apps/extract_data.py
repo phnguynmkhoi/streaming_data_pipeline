@@ -53,10 +53,9 @@ transaction_schema = StructType([
     StructField("user_id",StringType()),
     StructField("product_id",StringType()),
     StructField("payment_id",StringType()),
+    StructField("shipping_id",StringType()),
     StructField("quantity",IntegerType()),
     StructField("discount",IntegerType()),
-    StructField("shipping_address",StringType()),
-    StructField("shipping_cost",FloatType()),
     StructField("last_modified_ts",StringType()),
     StructField("status",StringType()),
 ])
@@ -125,11 +124,11 @@ streaming_schema = StructType([
     ]))
 ])
 
-def read_kafka_stream(streaming_schema,schema):
+def read_kafka_stream(streaming_schema,schema,name):
     return spark.readStream\
         .format("kafka")\
         .option("kafka.bootstrap.servers", "broker:29092") \
-        .option("subscribe", "transactions_streaming.public.users") \
+        .option("subscribe", f"transactions_streaming.public.{name}") \
         .option("startingOffsets", "earliest") \
         .load()\
         .selectExpr("CAST(value AS STRING) as value")\
@@ -138,15 +137,15 @@ def read_kafka_stream(streaming_schema,schema):
         .select(from_json(col("after"),schema).alias("data"))\
         .selectExpr("data.*")
 
-user_df = read_kafka_stream(streaming_schema,user_schema)
+user_df = read_kafka_stream(streaming_schema,user_schema,"users")
 
-product_df = read_kafka_stream(streaming_schema,product_schema)
+product_df = read_kafka_stream(streaming_schema,product_schema,"products")
 
-payment_df = read_kafka_stream(streaming_schema,payment_schema)
+payment_df = read_kafka_stream(streaming_schema,payment_schema,"payments")
 
-transaction_df = read_kafka_stream(streaming_schema,transaction_schema)
+transaction_df = read_kafka_stream(streaming_schema,transaction_schema,"transactions")
 
-shipping_df = read_kafka_stream(streaming_schema, shipping_schema)
+shipping_df = read_kafka_stream(streaming_schema, shipping_schema,"shippings")
 
 transaction_df = transaction_df.withColumn("date", to_date(col("last_modified_ts")))
 user_df = user_df.withColumn("date", to_date(col("last_modified_ts")))

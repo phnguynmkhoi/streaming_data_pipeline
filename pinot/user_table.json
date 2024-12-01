@@ -1,31 +1,74 @@
 {
-    "tableName": "transcript",
-    "tableType": "OFFLINE",
-    "segmentsConfig": {
-      "replication": 1
-    },
-    "tenants": {
-      "broker":"DefaultTenant",
-      "server":"DefaultTenant"
-    },
-    "tableIndexConfig": {
-      "loadMode": "MMAP",
-      "batchConfigs":{
-        "inputFormat":"json",
-        "input.fs.className":"org.apache.pinot.plugin.filesystem.S3PinotFS",
-        "input.fs.prop.region":"us-central",
-        "input.fs.prop.accessKey":"foo",
-        "input.fs.prop.secretKey":"bar"
-      }
-    },
-    "ingestionConfig": {
-      "batchIngestionConfig": {
-        "segmentIngestionType": "APPEND",
-        "segmentIngestionFrequency": "HOURLY"
-      },
-      "continueOnError": true,
-      "rowTimeValueCheck": true,
-      "segmentTimeValueCheck": false
-    },
-    "metadata": {}
-  }
+  "tableName": "users",
+  "tableType": "REALTIME",
+  "tenants": {
+    "broker": "DefaultTenant",
+    "server": "DefaultTenant",
+    "tagOverrideConfig": {}
+  },
+  "segmentsConfig": {
+    "schemaName": "users",
+    "timeColumnName": "last_modified_ts",
+    "replication": "1",
+    "replicasPerPartition": "1",
+    "retentionTimeUnit": null,
+    "retentionTimeValue": null,
+    "completionConfig": null,
+    "crypterClassName": null,
+    "peerSegmentDownloadScheme": null
+  },
+  "tableIndexConfig": {
+    "loadMode": "MMAP",
+    "invertedIndexColumns": [],
+    "createInvertedIndexDuringSegmentGeneration": false,
+    "rangeIndexColumns": [],
+    "sortedColumn": [],
+    "bloomFilterColumns": [],
+    "bloomFilterConfigs": null,
+    "noDictionaryColumns": [],
+    "onHeapDictionaryColumns": [],
+    "varLengthDictionaryColumns": [],
+    "enableDefaultStarTree": false,
+    "starTreeIndexConfigs": null,
+    "enableDynamicStarTreeCreation": false,
+    "segmentPartitionConfig": null,
+    "columnMinMaxValueGeneratorMode": null,
+    "aggregateMetrics": false,
+    "nullHandlingEnabled": false,
+    "streamConfigs": {
+      "streamType": "kafka",
+      "stream.kafka.topic.name": "streaming_users",
+      "stream.kafka.broker.list": "broker:29092",
+      "stream.kafka.consumer.type": "lowlevel",
+      "stream.kafka.consumer.prop.auto.offset.reset": "smallest",
+      "stream.kafka.consumer.factory.class.name": "org.apache.pinot.plugin.stream.kafka20.KafkaConsumerFactory",
+      "stream.kafka.decoder.class.name": "org.apache.pinot.plugin.stream.kafka.KafkaJSONMessageDecoder",
+      "realtime.segment.flush.threshold.rows": "0",
+      "realtime.segment.flush.threshold.segment.rows": "0",
+      "realtime.segment.flush.threshold.time": "24h",
+      "realtime.segment.flush.threshold.segment.size": "100M"
+    }
+  },
+  "metadata": {},
+  "ingestionConfig": {
+    "filterConfig": null,
+    "transformConfigs": null
+  },
+  "quota": {
+    "storage": null,
+    "maxQueriesPerSecond": null
+  },
+  "task": null,
+  "routing": {
+    "segmentPrunerTypes": null,
+    "instanceSelectorType": "strictReplicaGroup"
+  },
+  "query": {
+    "timeoutMs": null
+  },
+  "fieldConfigList": null,
+  "upsertConfig": {
+    "mode": "FULL"
+  },
+  "tierConfigs": null
+}

@@ -1,32 +1,20 @@
 {
-    "schemaName": "users",
+    "schemaName": "products",
     "dimensionFieldSpecs": [
       {
-        "name": "user_id",
+        "name": "product_id",
         "dataType": "STRING"
       },
       {
-        "name": "full_name",
+        "name": "product_name",
         "dataType": "STRING"
       },
       {
-        "name": "phone_number",
+        "name": "category",
         "dataType": "STRING"
       },
       {
-        "name": "sex",
-        "dataType": "STRING"
-      },
-      {
-        "name": "address",
-        "dataType": "STRING"
-      },
-      {
-        "name": "email",
-        "dataType": "STRING"
-      },
-      {
-        "name": "job",
+        "name": "merchant_name",
         "dataType": "STRING"
       },
       {
@@ -34,14 +22,17 @@
         "dataType": "STRING"
       }
     ],
-    "metricFieldSpecs": [],
+    "metricFieldSpecs": [
+        {
+            "name": "unit_price",
+            "dataType": "FLOAT"
+        },
+        {
+            "name": "rating",
+            "dataType": "FLOAT"
+        }
+    ],
     "dateTimeFieldSpecs": [
-      {
-        "name": "birthdate",
-        "dataType": "STRING",
-        "format": "1:DAYS:SIMPLE_DATE_FORMAT:yy-MM-dd",
-        "granularity": "1:DAYS"
-      },
       {
         "name": "last_modified_ts",
         "dataType": "STRING",
@@ -55,5 +46,6 @@
         "granularity": "1:DAYS"
       }
     ],
-    "primaryKeyColumns": ["user_id"]
+    "primaryKeyColumns": ["product_id"]
   }
+  

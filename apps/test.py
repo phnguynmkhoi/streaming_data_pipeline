@@ -17,6 +17,6 @@ spark = SparkSession\
         .getOrCreate()
 
 
-df = spark.read.parquet("s3a://transactions/users")
+df = spark.read.parquet("s3a://transactions/transactions")
 df.show(5)
 # print(df.count())

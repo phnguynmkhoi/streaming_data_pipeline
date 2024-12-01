@@ -1,5 +1,5 @@
 {
-    "tableName": "transactions",
+    "tableName": "products",
     "tableType": "REALTIME",
     "tenants": {
       "broker": "DefaultTenant",
@@ -7,7 +7,7 @@
       "tagOverrideConfig": {}
     },
     "segmentsConfig": {
-      "schemaName": "transactions",
+      "schemaName": "products",
       "timeColumnName": "last_modified_ts",
       "replication": "1",
       "replicasPerPartition": "1",
@@ -37,7 +37,7 @@
       "nullHandlingEnabled": false,
       "streamConfigs": {
         "streamType": "kafka",
-        "stream.kafka.topic.name": "streaming_transactions",
+        "stream.kafka.topic.name": "streaming_products",
         "stream.kafka.broker.list": "broker:29092",
         "stream.kafka.consumer.type": "lowlevel",
         "stream.kafka.consumer.prop.auto.offset.reset": "smallest",

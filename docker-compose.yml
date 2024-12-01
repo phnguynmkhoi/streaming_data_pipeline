@@ -153,7 +153,8 @@ services:
       retries: 5
     networks:
       - streamingnetwork
-    # volumes:
+    volumes:
+      - ./init-db:/docker-entrypoint-initdb.d/
       # - postgres_data:/var/lib/postgresql/data
 
   minio:
@@ -259,6 +260,36 @@ services:
       timeout: 10s
       retries: 5
       start_period: 10s
+
+  superset: 
+    image: apache/superset:latest
+    container_name: superset
+    ports:
+      - "8088:8088"
+    # env_file:
+    #   - superset.env
+    environment:
+      SUPERSET__SECRET_KEY: "K8DM5QPf6YVdl4zbytxtV92+TrOYFqkIgZLVNKDGqh+1iWNDmAXQ+Tkm"
+      SUPERSET__LOAD_EXAMPLES: "no"
+      SUPERSET__ADMIN_USERNAME: "admin"
+      SUPERSET__ADMIN_PASSWORD: "admin"
+      SUPERSET__ADMIN_EMAIL: "pnmk0811@gmail.com"
+      SUPERSET__SQLALCHEMY_DATABASE_URI: "postgresql+psycopg2://postgres:postgres@postgres:5432/superset"
+    volumes:
+      - ./superset_home:/app/superset_home
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      /bin/bash -c "
+      superset db upgrade &&
+      echo 1 &&
+      superset init &&
+      superset run -h 0.0.0.0 -p 8088
+      "
+    networks:
+      - streamingnetwork
+
   # mysql:
   #   image: mysql:8
   #   container_name: mysql

@@ -1,24 +1,12 @@
 {
-    "schemaName": "transactions",
+    "schemaName": "shippings",
     "dimensionFieldSpecs": [
       {
-        "name": "transaction_id",
-        "dataType": "STRING"
-      },
-      {
-        "name": "user_id",
-        "dataType": "STRING"
-      },
-      {
-        "name": "product_id",
-        "dataType": "STRING"
-      },
-      {
-        "name": "payment_id",
-        "dataType": "STRING"
-      },
-      {
         "name": "shipping_id",
+        "dataType": "STRING"
+      },
+      {
+        "name": "shipping_address",
         "dataType": "STRING"
       },
       {
@@ -28,12 +16,8 @@
     ],
     "metricFieldSpecs": [
         {
-            "name": "quantity",
-            "dataType": "INT"
-        },
-        {
-            "name": "discount",
-            "dataType": "INT"
+          "name": "shipping_cost",
+          "dataType": "FLOAT"
         }
     ],
     "dateTimeFieldSpecs": [
@@ -50,6 +34,6 @@
         "granularity": "1:DAYS"
       }
     ],
-    "primaryKeyColumns": ["transaction_id"]
+    "primaryKeyColumns": ["shipping_id"]
   }
   
