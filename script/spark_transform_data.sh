@@ -1,1 +1,0 @@
-docker exec spark-master bin/spark-submit spark-apps/transform_data.py
