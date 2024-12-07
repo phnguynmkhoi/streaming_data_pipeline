@@ -10,7 +10,7 @@ This project demonstrates the implementation of a real-time data warehouse solut
 - **Scalable Processing**: Utilizes Apache Spark for distributed and fault-tolerant data processing.
 - **Data Transformation**: Using **Apache Spark** for getting and transforming **Kafka** data and push back to **Kafka**
 - **Data Storage**: Stores processed data in **MinIO** datalake for archived.
-- **Analytics**: Utilizes Apache Pinot as Data Warehouse for realtime analysis 
+- **Analytics**: Utilizes **Apache Pinot** as Data Warehouse for realtime analysis 
 - **Fault Tolerance**: Built-in resilience, **Kafka** checkpoint for handling data failures and reprocessing.
 
 ---
@@ -26,9 +26,12 @@ The data pipeline consists of the following components:
 3. **Processing Layer**: 
     - Using **Apache Spark** for transforming data and push it back to **Kafka** 
 4. **Storage Layer**:
-    - Using MinIO for data storage 
-
-![Architecture Diagram](path-to-architecture-diagram.png)
+    - Using MinIO for data storage
+    - 
+### Architecture:
+![Architecture Diagram](https://github.com/user-attachments/assets/823b9e56-a5e3-4506-bd98-d5cb6349cfc5)
+### Data Model:
+![Data Model](https://github.com/user-attachments/assets/b3bc629c-71d3-4857-8c34-1c9c8481c677)
 
 ---
 
