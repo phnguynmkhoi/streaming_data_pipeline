@@ -42,9 +42,9 @@ def write_data_to_minio(df, datamart):
             .option("checkpointLocation",f"s3a://checkpoints/{datamart}")\
             .start()
 
-def write_to_kafka(df, name):
+def write_to_kafka(df, name, pk):
     return df\
-            .selectExpr("to_json(struct(*)) AS value")\
+            .selectExpr(f"CAST({pk} AS STRING) AS key", "to_json(struct(*)) AS value")\
             .writeStream\
             .format("kafka")\
             .option("kafka.bootstrap.servers", "broker:29092") \
@@ -155,11 +155,11 @@ product_df = product_df.withColumn("date", to_date(to_timestamp(col("last_modifi
 payment_df = payment_df.withColumn("date", to_date(to_timestamp(col("last_modified_ts"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
 shipping_df = shipping_df.withColumn("date", to_date(to_timestamp(col("last_modified_ts"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
 
-query6 = write_to_kafka(user_df,"users")
-query7 = write_to_kafka(product_df,"products")
-query8 = write_to_kafka(payment_df,"payments")
-query9 = write_to_kafka(transaction_df,"transactions")
-query10 = write_to_kafka(shipping_df,"shippings")
+query6 = write_to_kafka(user_df,"users","user_id")
+query7 = write_to_kafka(product_df,"products","product_id")
+query8 = write_to_kafka(payment_df,"payments","payment_id")
+query9 = write_to_kafka(transaction_df,"transactions","transaction_id")
+query10 = write_to_kafka(shipping_df,"shippings","shipping_id")
 
 query1 = write_data_to_minio(user_df,"users")
 query2 = write_data_to_minio(product_df,"products")
