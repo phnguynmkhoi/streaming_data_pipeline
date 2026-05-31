@@ -3,6 +3,10 @@ from pyspark.sql.functions import col, when,udf, lit, from_json, to_timestamp, t
 from pyspark.sql.types import StructField,IntegerType,StringType,StructType,FloatType
 import datetime
 import uuid
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 today = datetime.datetime.now().strftime("%y%m%d")
 
@@ -101,8 +105,8 @@ shipping_schema = StructType([
     StructField("last_modified_ts",StringType()),
 ])
 
-MINIO_ACCESS_KEY = "vTx7ykoKSJj8lHRB8VUJ"
-MINIO_SECRET_KEY = "tl6sujLw3xTY8IFUe5dsy44VDCXzMiosZHM4wEVa"
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
 
 spark = SparkSession\
         .builder\
@@ -113,9 +117,6 @@ spark = SparkSession\
         .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
         .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
         .config("spark.hadoop.fs.s3a.path.style.access", "true") \
-        .config("spark.sql.catalogImplementation", "hive") \
-        .config("hive.metastore.uris", "thrift://hive-metastore:9083") \
-        .enableHiveSupport() \
         .getOrCreate()
 
 streaming_schema = StructType([
@@ -134,6 +135,7 @@ def read_kafka_stream(streaming_schema,schema,name):
         .selectExpr("CAST(value AS STRING) as value")\
         .select(from_json(col("value"),streaming_schema).alias("value"))\
         .select("value.payload.after")\
+        .filter(col("after").isNotNull())\
         .select(from_json(col("after"),schema).alias("data"))\
         .selectExpr("data.*")
 
@@ -147,11 +149,11 @@ transaction_df = read_kafka_stream(streaming_schema,transaction_schema,"transact
 
 shipping_df = read_kafka_stream(streaming_schema, shipping_schema,"shippings")
 
-transaction_df = transaction_df.withColumn("date", to_date(col("last_modified_ts")))
-user_df = user_df.withColumn("date", to_date(col("last_modified_ts")))
-product_df = product_df.withColumn("date", to_date(col("last_modified_ts")))
-payment_df = payment_df.withColumn("date", to_date(col("last_modified_ts")))
-shipping_df = shipping_df.withColumn("date", to_date(col("last_modified_ts")))
+transaction_df = transaction_df.withColumn("date", to_date(to_timestamp(col("last_modified_ts"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
+user_df = user_df.withColumn("date", to_date(to_timestamp(col("last_modified_ts"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
+product_df = product_df.withColumn("date", to_date(to_timestamp(col("last_modified_ts"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
+payment_df = payment_df.withColumn("date", to_date(to_timestamp(col("last_modified_ts"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
+shipping_df = shipping_df.withColumn("date", to_date(to_timestamp(col("last_modified_ts"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
 
 query6 = write_to_kafka(user_df,"users")
 query7 = write_to_kafka(product_df,"products")
@@ -165,6 +167,4 @@ query3 = write_data_to_minio(payment_df,"payments")
 query4 = write_data_to_minio(transaction_df,"transactions")
 query5 = write_data_to_minio(shipping_df,"shippings")
 
-query5.awaitTermination()
-
-query10.awaitTermination()
+spark.streams.awaitAnyTermination()
