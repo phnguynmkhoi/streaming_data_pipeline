@@ -36,7 +36,7 @@
       {
         "name": "last_modified_ts",
         "dataType": "STRING",
-        "format": "1:MILISSECONDS:SIMPLE_DATE_FORMAT:yyyy-MM-dd HH:mm:ss",
+        "format": "1:MILLISECONDS:SIMPLE_DATE_FORMAT:yyyy-MM-dd HH:mm:ss.SSSSSS",
         "granularity": "1:SECONDS"
       },
       {
