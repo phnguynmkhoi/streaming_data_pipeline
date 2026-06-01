@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Never read `.env` files.
 - Every response must begin with "Khoi".
 - `PLAN.md` is the enhancement roadmap and progress tracker. After implementing any item from it, update `PLAN.md` in the same change: flip the item's status marker (🔲 Todo → ✅ Done) in both its section heading and the Summary Table, and note what was done. Keep the phase-level status line accurate (e.g. "Partially complete"). If an implementation diverges from the plan, revise the relevant item to match what was actually built.
+- If any script or command fails, stop immediately: show the exact error, explain the reason it failed, and ask the user how to proceed before taking any further action.
 
 ## Architecture
 
