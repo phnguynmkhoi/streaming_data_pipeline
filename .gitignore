@@ -11,3 +11,5 @@ _spark_*
 checkpoint/
 *.crc
 PLAN.md
+CLAUDE.md
+

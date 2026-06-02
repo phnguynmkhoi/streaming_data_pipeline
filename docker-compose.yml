@@ -122,7 +122,7 @@ services:
       - streamingnetwork
 
   debezium-ui:
-    image: debezium/debezium-ui:latest
+    image: debezium/debezium-ui:2.5
     container_name: debezium-ui
     hostname: debezium-ui
     depends_on:
