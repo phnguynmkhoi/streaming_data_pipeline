@@ -50,8 +50,12 @@ cd realtime-datawarehouse
 ```
 
 ### 2. Install dependencies
-- Install aws-java-sdk-bundle-1.11.375.jar, hadoop-aws-3.2.0.jar
-- Copy above file and paste into jars folder
+```bash
+bash script/download_jars.sh
+```
+Downloads the JARs `Dockerfile.spark` bakes into the Spark image (`jars/` is gitignored, so this populates it locally):
+- `aws-java-sdk-bundle-1.11.375.jar`, `hadoop-aws-3.2.0.jar` — S3A/MinIO support
+- `spark-sql-kafka-0-10_2.12-3.1.3.jar`, `spark-token-provider-kafka-0-10_2.12-3.1.3.jar`, `kafka-clients-2.6.0.jar`, `commons-pool2-2.6.2.jar` — Kafka connector for Spark Structured Streaming, baked into the image so `spark-submit` no longer needs `--packages` (which pulled it from Maven Central on every run — slow, and fails offline)
 
 ### 3. Start services
 ```bash 
