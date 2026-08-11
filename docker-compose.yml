@@ -155,7 +155,7 @@ services:
       - streamingnetwork
     volumes:
       - ./init-db:/docker-entrypoint-initdb.d/
-      # - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
 
   minio:
     image: minio/minio:latest
@@ -200,7 +200,7 @@ services:
   
   pinot-controller:
     image: apachepinot/pinot
-    command: "StartController -zkAddress zookeeper:2181"
+    command: "StartController -zkAddress zookeeper:2181 -controllerHost pinot-controller"
     container_name: "pinot-controller"
     restart: unless-stopped
     ports:
@@ -221,7 +221,7 @@ services:
 
   pinot-broker:
     image: apachepinot/pinot
-    command: "StartBroker -zkAddress zookeeper:2181"
+    command: "StartBroker -zkAddress zookeeper:2181 -brokerHost pinot-broker"
     container_name: "pinot-broker"
     restart: unless-stopped
     ports:
@@ -242,7 +242,7 @@ services:
 
   pinot-server:
     image: apachepinot/pinot 
-    command: "StartServer -zkAddress zookeeper:2181"
+    command: "StartServer -zkAddress zookeeper:2181 -serverHost pinot-server"
     container_name: "pinot-server"
     restart: unless-stopped
     ports:
