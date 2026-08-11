@@ -11,8 +11,8 @@
       "timeColumnName": "last_modified_ts",
       "replication": "1",
       "replicasPerPartition": "1",
-      "retentionTimeUnit": null,
-      "retentionTimeValue": null,
+      "retentionTimeUnit": "DAYS",
+      "retentionTimeValue": "3",
       "completionConfig": null,
       "crypterClassName": null,
       "peerSegmentDownloadScheme": null
