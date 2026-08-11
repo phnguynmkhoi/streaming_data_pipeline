@@ -1,5 +1,8 @@
+import json
+import logging
+
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, to_timestamp, to_date
+from pyspark.sql.streaming import StreamingQueryListener
 
 from credential import MINIO_ACCESS_KEY, MINIO_SECRET_KEY
 from schema import (
@@ -10,7 +13,42 @@ from schema import (
     shipping_schema,
     streaming_schema,
 )
-from helper import write_data_to_minio, write_to_kafka, write_to_dlq, read_kafka_stream
+from helper import write_data_to_minio, write_to_kafka, write_to_dlq, read_kafka_stream, add_date_column
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger("streaming_pipeline")
+
+
+class PipelineListener(StreamingQueryListener):
+    """Emits per-batch metrics as structured JSON so lag/stalls are visible
+    without opening the Spark UI. `watermark` will always be null here since
+    none of these queries use .withWatermark() (plain append streams, no
+    windowed aggregation) -- left in the schema for parity with the metric
+    Spark actually tracks, in case a future query adds one.
+    """
+
+    def onQueryStarted(self, event):
+        logger.info(json.dumps({"event": "started", "query": event.name, "id": str(event.id)}))
+
+    def onQueryProgress(self, event):
+        progress = event.progress
+        logger.info(json.dumps({
+            "event": "progress",
+            "query": progress.name,
+            "batch_id": progress.batchId,
+            "input_rows": progress.numInputRows,
+            "rows_per_sec": progress.processedRowsPerSecond,
+            "batch_duration_ms": (progress.durationMs or {}).get("triggerExecution"),
+            "watermark": (progress.eventTime or {}).get("watermark"),
+        }))
+
+    def onQueryTerminated(self, event):
+        logger.info(json.dumps({
+            "event": "terminated",
+            "id": str(event.id),
+            "exception": event.exception,
+        }))
+
 
 spark = SparkSession\
         .builder\
@@ -23,6 +61,8 @@ spark = SparkSession\
         .config("spark.hadoop.fs.s3a.path.style.access", "true") \
         .getOrCreate()
 
+spark.streams.addListener(PipelineListener())
+
 user_df, user_bad_df = read_kafka_stream(spark, streaming_schema, user_schema, "users", "user_id")
 
 product_df, product_bad_df = read_kafka_stream(spark, streaming_schema, product_schema, "products", "product_id")
@@ -33,11 +73,11 @@ transaction_df, transaction_bad_df = read_kafka_stream(spark, streaming_schema, 
 
 shipping_df, shipping_bad_df = read_kafka_stream(spark, streaming_schema, shipping_schema, "shippings", "shipping_id")
 
-transaction_df = transaction_df.withColumn("date", to_date(to_timestamp(col("last_modified_ts"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
-user_df = user_df.withColumn("date", to_date(to_timestamp(col("last_modified_ts"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
-product_df = product_df.withColumn("date", to_date(to_timestamp(col("last_modified_ts"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
-payment_df = payment_df.withColumn("date", to_date(to_timestamp(col("last_modified_ts"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
-shipping_df = shipping_df.withColumn("date", to_date(to_timestamp(col("last_modified_ts"), "yyyy-MM-dd HH:mm:ss.SSSSSS")))
+transaction_df = add_date_column(transaction_df)
+user_df = add_date_column(user_df)
+product_df = add_date_column(product_df)
+payment_df = add_date_column(payment_df)
+shipping_df = add_date_column(shipping_df)
 
 query6 = write_to_kafka(user_df,"users","user_id")
 query7 = write_to_kafka(product_df,"products","product_id")
