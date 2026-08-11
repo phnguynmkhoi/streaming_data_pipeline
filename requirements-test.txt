@@ -1,0 +1,5 @@
+-r requirements.txt
+# Pinned to match the spark-cluster:3.1.3 image's runtime, so tests exercise
+# the same Spark engine version the pipeline actually runs in production.
+pyspark==3.1.3
+pytest>=7.4,<8
