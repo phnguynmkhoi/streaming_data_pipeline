@@ -19,11 +19,11 @@
     },
     "tableIndexConfig": {
       "loadMode": "MMAP",
-      "invertedIndexColumns": [],
+      "invertedIndexColumns": ["status"],
       "createInvertedIndexDuringSegmentGeneration": false,
       "rangeIndexColumns": [],
       "sortedColumn": [],
-      "bloomFilterColumns": [],
+      "bloomFilterColumns": ["shipping_id"],
       "bloomFilterConfigs": null,
       "noDictionaryColumns": [],
       "onHeapDictionaryColumns": [],
