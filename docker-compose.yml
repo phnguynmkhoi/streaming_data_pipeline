@@ -8,6 +8,8 @@ x-spark-worker-common:
     - SPARK_DRIVER_MEMORY=2G
     - SPARK_EXECUTOR_MEMORY=2G
     - SPARK_WORKLOAD=worker
+    - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+    - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
   volumes:
     - ./apps:/opt/spark/spark-apps
   depends_on:
@@ -52,7 +54,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
     healthcheck:
@@ -175,6 +177,9 @@ services:
   spark-master:
     image: spark-cluster:3.1.3
     container_name: spark-master
+    environment:
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
     ports:
       - "9090:8080"
       - "7077:7077"
