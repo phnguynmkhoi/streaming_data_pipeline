@@ -1,2 +1,4 @@
-MINIO_ACCESS_KEY = "minioadmin"
-MINIO_SECRET_KEY = "minioadmin"
+import os
+
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")

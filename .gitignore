@@ -14,4 +14,4 @@ debezium-plugins/
 PLAN.md
 CLAUDE.md
 .claude/
-
+*.log
