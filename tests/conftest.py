@@ -16,6 +16,7 @@ def spark():
         .master("local[1]")\
         .config("spark.ui.enabled", "false")\
         .config("spark.sql.shuffle.partitions", "1")\
+        .config("spark.jars.packages", "org.apache.spark:spark-avro_2.12:3.1.3")\
         .getOrCreate()
     yield session
     session.stop()
