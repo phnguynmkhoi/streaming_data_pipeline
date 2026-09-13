@@ -94,6 +94,28 @@ services:
       timeout: 10s
       retries: 5
 
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.4.0
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      broker:
+        condition: service_healthy
+    ports:
+      - '8081:8081'
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    healthcheck:
+      test: [ 'CMD', 'curl', '-f', 'http://localhost:8081/subjects' ]
+      start_period: 15s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - streamingnetwork
+
   debezium:
     image: debezium/connect:2.7.3.Final
     container_name: debezium
@@ -103,8 +125,16 @@ services:
         condition: service_healthy
       broker:
         condition: service_healthy
+      schema-registry:
+        condition: service_healthy
     ports:
       - '8093:8083'
+    volumes:
+      # kafka-connect-avro-converter isn't bundled in this image -- populate
+      # via script/download_debezium_avro_plugin.sh (PLAN.md 3.2). The
+      # image's default plugin.path already scans /kafka/connect, so this
+      # subdirectory is picked up automatically.
+      - ./debezium-plugins/kafka-connect-avro-converter:/kafka/connect/kafka-connect-avro-converter
     environment:
       BOOTSTRAP_SERVERS: broker:29092
       CONNECT_REST_ADVERTISED_HOST_NAME: debezium
@@ -114,7 +144,7 @@ services:
       OFFSET_STORAGE_TOPIC: connect_offsets
       KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      ENABLE_DEBEZIUM_SCRIPTING: 'true'
+      ENABLE_DEBEZIUM_SCRIPTING: 'false'
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     healthcheck:
       test:

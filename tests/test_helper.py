@@ -1,74 +1,112 @@
+import base64
 import json
 
+import pytest
+from pyspark.sql import Row
+from pyspark.sql.avro.functions import to_avro
+from pyspark.sql.functions import col, struct
+from pyspark.sql.types import StringType, StructField, StructType
+
 from helper import add_date_column, parse_cdc_stream, to_kafka_kv
-from schema import streaming_schema, user_schema
+
+# Minimal stand-in for a Debezium Avro CDC envelope: a record with a single
+# `after` field, nullable (null for DELETE tombstones), itself a nullable
+# record of the entity's columns. Real envelopes carry more fields
+# (before/source/op/ts_ms/...), but parse_cdc_stream only reads `after`.
+VALUE_AVRO_SCHEMA = {
+    "type": "record",
+    "name": "Value",
+    "namespace": "test",
+    "fields": [
+        {"name": "user_id", "type": ["null", "string"], "default": None},
+        {"name": "full_name", "type": ["null", "string"], "default": None},
+    ],
+}
+
+ENVELOPE_AVRO_SCHEMA = json.dumps({
+    "type": "record",
+    "name": "Envelope",
+    "namespace": "test",
+    "fields": [
+        {"name": "after", "type": ["null", VALUE_AVRO_SCHEMA], "default": None},
+    ],
+})
+
+VALUE_STRUCT_TYPE = StructType([
+    StructField("user_id", StringType(), True),
+    StructField("full_name", StringType(), True),
+])
+
+CONFLUENT_HEADER = b"\x00\x00\x00\x00\x01"  # magic byte + dummy 4-byte schema id -- parse_cdc_stream strips these blindly, it never validates the id
 
 
-def envelope(after):
-    """Build a Debezium-style CDC envelope JSON string like Kafka would carry."""
-    return json.dumps({"payload": {"after": after}})
+def encode_envelope(spark, after_value):
+    """Build Confluent-wire-format Avro bytes for a Debezium-style envelope
+    matching ENVELOPE_AVRO_SCHEMA. `after_value` is a dict of field values,
+    or None for a DELETE tombstone.
+    """
+    after_row = Row(**after_value) if after_value is not None else None
+    df = spark.createDataFrame(
+        [Row(after=after_row)],
+        StructType([StructField("after", VALUE_STRUCT_TYPE, True)]),
+    )
+    body = df.select(to_avro(struct(col("after")), ENVELOPE_AVRO_SCHEMA).alias("bytes"))\
+        .collect()[0]["bytes"]
+    return CONFLUENT_HEADER + body
 
 
 def test_parse_cdc_stream_good_row_goes_to_good_df(spark):
-    after = json.dumps({
-        "user_id": "u1",
-        "full_name": "Alice",
-        "phone_number": "555-0100",
-        "sex": "F",
-        "address": "1 Main St",
-        "birthdate": "1990-01-01",
-        "email": "alice@example.com",
-        "job": "engineer",
-        "last_modified_ts": "2024-01-15 10:30:45.123456",
-        "status": "active",
-    })
-    df = spark.createDataFrame([(envelope(after),)], ["value"])
+    value = encode_envelope(spark, {"user_id": "u1", "full_name": "Alice"})
+    df = spark.createDataFrame([(value,)], ["value"])
 
-    good_df, bad_df = parse_cdc_stream(df, streaming_schema, user_schema, "users", "user_id")
+    good_df, bad_df = parse_cdc_stream(df, ENVELOPE_AVRO_SCHEMA, "users", "user_id")
 
     assert bad_df.count() == 0
     rows = good_df.collect()
     assert len(rows) == 1
     assert rows[0]["user_id"] == "u1"
-    assert rows[0]["email"] == "alice@example.com"
+    assert rows[0]["full_name"] == "Alice"
 
 
 def test_parse_cdc_stream_schema_drift_missing_pk_goes_to_bad_df(spark):
-    # "user_id" dropped/renamed upstream, but the rest of the JSON still
-    # parses fine -- this is the case a plain `data IS NULL` check would miss.
-    drifted_after = json.dumps({
-        "full_name": "Bob",
-        "last_modified_ts": "2024-01-15 10:30:45.123456",
-        "status": "active",
-    })
-    df = spark.createDataFrame([(envelope(drifted_after),)], ["value"])
+    # user_id is null on this row even though the record decoded fine --
+    # the case a plain "decode succeeded" check would miss.
+    value = encode_envelope(spark, {"user_id": None, "full_name": "Bob"})
+    df = spark.createDataFrame([(value,)], ["value"])
 
-    good_df, bad_df = parse_cdc_stream(df, streaming_schema, user_schema, "users", "user_id")
+    good_df, bad_df = parse_cdc_stream(df, ENVELOPE_AVRO_SCHEMA, "users", "user_id")
 
     assert good_df.count() == 0
     rows = bad_df.collect()
     assert len(rows) == 1
     assert rows[0]["entity"] == "users"
-    assert rows[0]["raw_value"] == drifted_after
+    # raw_value is base64-encoded in bad_df (see parse_cdc_stream) since the
+    # DLQ's JSON sink can't write raw binary columns.
+    assert rows[0]["raw_value"] == base64.b64encode(value).decode()
 
 
-def test_parse_cdc_stream_unparseable_json_goes_to_bad_df(spark):
-    df = spark.createDataFrame([(envelope("{not valid json"),)], ["value"])
+def test_parse_cdc_stream_decode_failure_raises(spark):
+    # Not valid Avro against ENVELOPE_AVRO_SCHEMA at all -- simulates an
+    # incompatible schema change decoded with a stale cached schema.
+    # from_avro's default FAILFAST mode raises rather than returning null;
+    # in production this is caught by extract_data.py's per-entity
+    # supervisor, not routed to the DLQ (see PLAN.md 3.2).
+    garbage = b"\xff\xff\xff\xff\xff\xff\xff\xff"
+    df = spark.createDataFrame([(garbage,)], ["value"])
 
-    good_df, bad_df = parse_cdc_stream(df, streaming_schema, user_schema, "users", "user_id")
+    good_df, bad_df = parse_cdc_stream(df, ENVELOPE_AVRO_SCHEMA, "users", "user_id")
 
-    assert good_df.count() == 0
-    rows = bad_df.collect()
-    assert len(rows) == 1
-    assert rows[0]["raw_value"] == "{not valid json"
+    with pytest.raises(Exception):
+        bad_df.collect()
 
 
 def test_parse_cdc_stream_drops_delete_tombstones(spark):
-    # payload.after is JSON null for DELETE events -- these must be dropped
+    # after is Avro-null for DELETE events -- these must be dropped
     # entirely, not routed to either output (see PLAN.md 1.4).
-    df = spark.createDataFrame([(envelope(None),)], ["value"])
+    value = encode_envelope(spark, None)
+    df = spark.createDataFrame([(value,)], ["value"])
 
-    good_df, bad_df = parse_cdc_stream(df, streaming_schema, user_schema, "users", "user_id")
+    good_df, bad_df = parse_cdc_stream(df, ENVELOPE_AVRO_SCHEMA, "users", "user_id")
 
     assert good_df.count() == 0
     assert bad_df.count() == 0

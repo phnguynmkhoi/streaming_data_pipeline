@@ -1,53 +1,91 @@
 import json
 import logging
+import threading
+import time
 
 from pyspark.sql import SparkSession
-from pyspark.sql.streaming import StreamingQueryListener
 
 from credential import MINIO_ACCESS_KEY, MINIO_SECRET_KEY
-from schema import (
-    transaction_schema,
-    user_schema,
-    product_schema,
-    payment_schema,
-    shipping_schema,
-    streaming_schema,
-)
+from schema_registry import fetch_latest_schema
 from helper import write_data_to_minio, write_to_kafka, write_to_dlq, read_kafka_stream, add_date_column
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("streaming_pipeline")
 
+ENTITIES = [
+    ("users", "user_id"),
+    ("products", "product_id"),
+    ("payments", "payment_id"),
+    ("transactions", "transaction_id"),
+    ("shippings", "shipping_id"),
+]
 
-class PipelineListener(StreamingQueryListener):
-    """Emits per-batch metrics as structured JSON so lag/stalls are visible
-    without opening the Spark UI. `watermark` will always be null here since
-    none of these queries use .withWatermark() (plain append streams, no
-    windowed aggregation) -- left in the schema for parity with the metric
-    Spark actually tracks, in case a future query adds one.
+POLL_INTERVAL_SECONDS = 5
+
+
+def log_query_started(query):
+    logger.info(json.dumps({"event": "started", "query": query.name, "id": query.id}))
+
+
+def supervise_entity(name, queries):
+    """Poll one entity's streaming queries (kafka/minio/dlq) for progress and
+    failures, isolated from the other 4 entities -- so a decode failure on
+    this entity's topic (e.g. an Avro schema-drift mismatch, PLAN.md 3.2)
+    doesn't take down the other 4. Before this, all 15 queries shared one
+    spark.streams.awaitAnyTermination() (PLAN.md 1.1), so any one query
+    dying killed the whole job.
+
+    Polling `.lastProgress`/`.exception()` (both plain Python-native
+    StreamingQuery APIs, unrelated to the listener) rather than
+    StreamingQueryListener: pyspark.sql.streaming.StreamingQueryListener
+    (the native Python listener API) only exists from Spark 3.4 onward --
+    this project pins Spark 3.1.3. A Py4J Java-interface bridge (the usual
+    pre-3.4 workaround) was tried and doesn't work either:
+    org.apache.spark.sql.streaming.StreamingQueryListener is a Scala
+    *abstract class*, not an interface/trait, and Py4J's Python Proxy
+    mechanism can only implement Java interfaces -- confirmed via
+    `py4j.Py4JException: ... is not an interface and cannot be used as a
+    Python Proxy` when actually run (PLAN.md 2.5).
+
+    If any of this entity's queries dies with an exception, the other
+    queries for the same entity are stopped too (so the entity fails as a
+    consistent unit) and the failure is logged. Queries for every other
+    entity keep running untouched.
     """
+    last_batch_id = {q.name: None for q in queries}
 
-    def onQueryStarted(self, event):
-        logger.info(json.dumps({"event": "started", "query": event.name, "id": str(event.id)}))
+    while any(q.isActive for q in queries):
+        for q in queries:
+            if not q.isActive:
+                continue
 
-    def onQueryProgress(self, event):
-        progress = event.progress
-        logger.info(json.dumps({
-            "event": "progress",
-            "query": progress.name,
-            "batch_id": progress.batchId,
-            "input_rows": progress.numInputRows,
-            "rows_per_sec": progress.processedRowsPerSecond,
-            "batch_duration_ms": (progress.durationMs or {}).get("triggerExecution"),
-            "watermark": (progress.eventTime or {}).get("watermark"),
-        }))
+            exception = q.exception()
+            if exception is not None:
+                logger.error(json.dumps({
+                    "event": "entity_failed",
+                    "entity": name,
+                    "query": q.name,
+                    "exception": str(exception),
+                }))
+                for other in queries:
+                    if other.isActive:
+                        other.stop()
+                return
 
-    def onQueryTerminated(self, event):
-        logger.info(json.dumps({
-            "event": "terminated",
-            "id": str(event.id),
-            "exception": event.exception,
-        }))
+            progress = q.lastProgress
+            if progress and progress.get("batchId") != last_batch_id[q.name]:
+                last_batch_id[q.name] = progress.get("batchId")
+                logger.info(json.dumps({
+                    "event": "progress",
+                    "query": progress.get("name"),
+                    "batch_id": progress.get("batchId"),
+                    "input_rows": progress.get("numInputRows"),
+                    "rows_per_sec": progress.get("processedRowsPerSecond"),
+                    "batch_duration_ms": (progress.get("durationMs") or {}).get("triggerExecution"),
+                    "watermark": (progress.get("eventTime") or {}).get("watermark"),
+                }))
+
+        time.sleep(POLL_INTERVAL_SECONDS)
 
 
 spark = SparkSession\
@@ -61,44 +99,23 @@ spark = SparkSession\
         .config("spark.hadoop.fs.s3a.path.style.access", "true") \
         .getOrCreate()
 
-spark.streams.addListener(PipelineListener())
+entity_threads = []
+for name, pk in ENTITIES:
+    avro_schema_json = fetch_latest_schema(f"transactions_streaming.public.{name}")
+    good_df, bad_df = read_kafka_stream(spark, avro_schema_json, name, pk)
+    good_df = add_date_column(good_df)
 
-user_df, user_bad_df = read_kafka_stream(spark, streaming_schema, user_schema, "users", "user_id")
+    queries = [
+        write_to_kafka(good_df, name, pk),
+        write_data_to_minio(good_df, name),
+        write_to_dlq(bad_df, name),
+    ]
+    for q in queries:
+        log_query_started(q)
 
-product_df, product_bad_df = read_kafka_stream(spark, streaming_schema, product_schema, "products", "product_id")
+    t = threading.Thread(target=supervise_entity, args=(name, queries))
+    t.start()
+    entity_threads.append(t)
 
-payment_df, payment_bad_df = read_kafka_stream(spark, streaming_schema, payment_schema, "payments", "payment_id")
-
-transaction_df, transaction_bad_df = read_kafka_stream(spark, streaming_schema, transaction_schema, "transactions", "transaction_id")
-
-shipping_df, shipping_bad_df = read_kafka_stream(spark, streaming_schema, shipping_schema, "shippings", "shipping_id")
-
-transaction_df = add_date_column(transaction_df)
-user_df = add_date_column(user_df)
-product_df = add_date_column(product_df)
-payment_df = add_date_column(payment_df)
-shipping_df = add_date_column(shipping_df)
-
-query6 = write_to_kafka(user_df,"users","user_id")
-query7 = write_to_kafka(product_df,"products","product_id")
-query8 = write_to_kafka(payment_df,"payments","payment_id")
-query9 = write_to_kafka(transaction_df,"transactions","transaction_id")
-query10 = write_to_kafka(shipping_df,"shippings","shipping_id")
-
-query1 = write_data_to_minio(user_df,"users")
-query2 = write_data_to_minio(product_df,"products")
-query3 = write_data_to_minio(payment_df,"payments")
-query4 = write_data_to_minio(transaction_df,"transactions")
-query5 = write_data_to_minio(shipping_df,"shippings")
-
-query11 = write_to_dlq(user_bad_df, "users")
-query12 = write_to_dlq(product_bad_df, "products")
-query13 = write_to_dlq(payment_bad_df, "payments")
-query14 = write_to_dlq(transaction_bad_df, "transactions")
-query15 = write_to_dlq(shipping_bad_df, "shippings")
-
-try:
-    spark.streams.awaitAnyTermination()
-except Exception as e:
-    import traceback
-    traceback.print_exc()
+for t in entity_threads:
+    t.join()

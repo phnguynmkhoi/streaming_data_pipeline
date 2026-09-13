@@ -10,6 +10,8 @@ jars/*
 _spark_*
 checkpoint/
 *.crc
+debezium-plugins/
 PLAN.md
 CLAUDE.md
+.claude/
 

@@ -1,7 +1,14 @@
-from pyspark.sql.functions import col, from_json, lit, to_date, to_timestamp
+from pyspark.sql.avro.functions import from_avro
+from pyspark.sql.functions import base64, col, expr, lit, to_date, to_timestamp
 
 KAFKA_BOOTSTRAP_SERVERS = "broker:29092"
 LAST_MODIFIED_TS_FORMAT = "yyyy-MM-dd HH:mm:ss.SSSSSS"
+
+# Kafka's Confluent wire format prefixes every Avro message with a 5-byte
+# header (1-byte magic + 4-byte schema ID) before the Avro body. That header
+# is stripped before decoding -- see schema_registry.py for why the schema
+# itself is fetched once at startup rather than resolved per-record from it.
+CONFLUENT_WIRE_HEADER_BYTES = 5
 
 
 # ---------------------------------------------------------------------------
@@ -10,30 +17,44 @@ LAST_MODIFIED_TS_FORMAT = "yyyy-MM-dd HH:mm:ss.SSSSSS"
 # what makes them unit-testable with a local SparkSession — see tests/.
 # ---------------------------------------------------------------------------
 
-def parse_cdc_stream(df, streaming_schema, schema, name, pk):
-    """Parse Debezium's CDC JSON envelope out of a raw Kafka `value` column.
+def parse_cdc_stream(df, avro_schema_json, name, pk):
+    """Decode Debezium's Avro CDC envelope out of a raw (binary) Kafka
+    `value` column.
 
-    Splits rows into (good_df, bad_df):
-    - Rows where the envelope's `payload.after` is null (e.g. DELETE
-      tombstones) are dropped entirely — never routed to either output.
-    - Rows where `after` is unparseable JSON, or parses but is missing the
-      primary key (schema drift), go to bad_df as (raw_value, entity).
+    A row that fails to decode entirely (e.g. an incompatible schema change
+    since avro_schema_json was fetched at job startup) is NOT routed to
+    bad_df here -- from_avro runs in its default FAILFAST mode, so a
+    genuinely corrupt/incompatible record raises rather than returning null,
+    failing this entity's streaming queries outright. That's deliberate: per
+    PLAN.md 3.2, hard schema drift is meant to fail loud (caught and logged
+    by extract_data.py's per-entity supervisor) rather than be silently
+    absorbed into the DLQ. A compatible/additive schema change (e.g. a new
+    field) still decodes fine against the stale schema -- it just won't
+    surface the new field until the job restarts and re-fetches.
+
+    Splits successfully-decoded rows into (good_df, bad_df):
+    - `after` null (e.g. DELETE tombstones) is dropped entirely — never
+      routed to either output.
+    - `after.<pk>` null (schema drift landed on the primary key, but the
+      record still decoded) goes to bad_df as (raw_value, entity).
     - Everything else is flattened to its columns in good_df.
     """
-    after_df = df\
-        .select(from_json(col("value"), streaming_schema).alias("value"))\
-        .select("value.payload.after")\
-        .filter(col("after").isNotNull())\
-        .select(col("after"), from_json(col("after"), schema).alias("data"))
+    after_df = df.select(
+        expr(f"substring(value, {CONFLUENT_WIRE_HEADER_BYTES + 1}, length(value))").alias("avro_body"),
+        col("value").alias("raw_value"),
+    ).select(
+        col("raw_value"),
+        from_avro(col("avro_body"), avro_schema_json)["after"].alias("after"),
+    ).filter(col("after").isNotNull())
 
-    # data is null when the JSON itself is unparseable; data.<pk> is null when
-    # a column was dropped/renamed upstream (schema drift) but the JSON still parses
-    is_bad = col("data").isNull() | col(f"data.{pk}").isNull()
+    is_bad = col(f"after.{pk}").isNull()
 
+    # raw_value is binary (the undecoded Avro body); base64-encode it so the
+    # DLQ's JSON sink can actually write it (Spark's JSON writer doesn't
+    # accept BinaryType columns as-is).
     bad_df = after_df.filter(is_bad)\
-        .select(col("after").alias("raw_value"), lit(name).alias("entity"))
-
-    good_df = after_df.filter(~is_bad).selectExpr("data.*")
+        .select(base64(col("raw_value")).alias("raw_value"), lit(name).alias("entity"))
+    good_df = after_df.filter(~is_bad).selectExpr("after.*")
 
     return good_df, bad_df
 
@@ -87,13 +108,15 @@ def write_to_dlq(df, name):
             .start()
 
 
-def read_kafka_stream(spark, streaming_schema, schema, name, pk):
+def read_kafka_stream(spark, avro_schema_json, name, pk):
+    # value stays binary here (Avro-encoded) -- unlike the old JSON path,
+    # it must NOT be cast to STRING, or the bytes get corrupted.
     raw_df = spark.readStream\
         .format("kafka")\
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS) \
         .option("subscribe", f"transactions_streaming.public.{name}") \
         .option("startingOffsets", "earliest") \
         .load()\
-        .selectExpr("CAST(value AS STRING) as value")
+        .select("value")
 
-    return parse_cdc_stream(raw_df, streaming_schema, schema, name, pk)
+    return parse_cdc_stream(raw_df, avro_schema_json, name, pk)
