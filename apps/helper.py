@@ -1,8 +1,16 @@
 from pyspark.sql.avro.functions import from_avro
-from pyspark.sql.functions import base64, col, expr, lit, to_date, to_timestamp
+from pyspark.sql.functions import base64, col, current_date, expr, lit, to_date, to_timestamp, when
 
 KAFKA_BOOTSTRAP_SERVERS = "broker:29092"
 LAST_MODIFIED_TS_FORMAT = "yyyy-MM-dd HH:mm:ss.SSSSSS"
+
+ENTITIES = [
+    ("users", "user_id"),
+    ("products", "product_id"),
+    ("payments", "payment_id"),
+    ("transactions", "transaction_id"),
+    ("shippings", "shipping_id"),
+]
 
 # Kafka's Confluent wire format prefixes every Avro message with a 5-byte
 # header (1-byte magic + 4-byte schema ID) before the Avro body. That header
@@ -16,6 +24,40 @@ CONFLUENT_WIRE_HEADER_BYTES = 5
 # These work identically on streaming and static (batch) DataFrames, which is
 # what makes them unit-testable with a local SparkSession — see tests/.
 # ---------------------------------------------------------------------------
+
+def decode_envelope(avro_schema_json):
+    """Column expression decoding a raw Kafka `value` into Debezium's Avro
+    envelope. Null for Kafka tombstones (null value)."""
+    avro_body = expr(f"substring(value, {CONFLUENT_WIRE_HEADER_BYTES + 1}, length(value))")
+    return from_avro(avro_body, avro_schema_json)
+
+
+def cdc_changes(df, avro_schema_json, pk):
+    """Flatten Debezium change events for the staging archive that feeds the
+    nightly Iceberg MERGE (PLAN.md 4.3).
+
+    Unlike parse_cdc_stream (which feeds Kafka/Pinot and drops deletes), this
+    keeps DELETEs: Debezium's `after` is null for a delete, so the row image
+    comes from `before`. Each row carries `cdc_op` (c/u/d/r), `cdc_ts_ms`
+    (source commit time, used to order changes) and `kafka_offset` (tiebreak
+    within the same millisecond). Kafka tombstones and rows with a null
+    primary key are dropped -- the latter already go to the DLQ.
+    """
+    events = df.select(
+        decode_envelope(avro_schema_json).alias("e"),
+        col("offset").alias("kafka_offset"),
+    ).filter(col("e").isNotNull())
+
+    row = when(col("e.op") == "d", col("e.before")).otherwise(col("e.after"))
+
+    return events.select(
+        row.alias("row"),
+        col("e.op").alias("cdc_op"),
+        col("e.source.ts_ms").alias("cdc_ts_ms"),
+        col("kafka_offset"),
+    ).filter(col(f"row.{pk}").isNotNull())\
+        .select("row.*", "cdc_op", "cdc_ts_ms", "kafka_offset")
+
 
 def parse_cdc_stream(df, avro_schema_json, name, pk):
     """Decode Debezium's Avro CDC envelope out of a raw (binary) Kafka
@@ -40,11 +82,8 @@ def parse_cdc_stream(df, avro_schema_json, name, pk):
     - Everything else is flattened to its columns in good_df.
     """
     after_df = df.select(
-        expr(f"substring(value, {CONFLUENT_WIRE_HEADER_BYTES + 1}, length(value))").alias("avro_body"),
         col("value").alias("raw_value"),
-    ).select(
-        col("raw_value"),
-        from_avro(col("avro_body"), avro_schema_json)["after"].alias("after"),
+        decode_envelope(avro_schema_json)["after"].alias("after"),
     ).filter(col("after").isNotNull())
 
     is_bad = col(f"after.{pk}").isNull()
@@ -79,12 +118,17 @@ def to_kafka_kv(df, pk):
 # running Kafka/MinIO, which is an integration-test concern (PLAN.md 6.x).
 # ---------------------------------------------------------------------------
 
-def write_data_to_minio(df, datamart):
-    return df.writeStream\
-            .queryName(f"minio_{datamart}")\
+def write_to_staging(df, name):
+    # Partitioned by processing date, not event date: a change that arrives
+    # late (e.g. the job was down over midnight) lands in today's partition
+    # and still gets merged tomorrow, instead of into a date already merged.
+    return df.withColumn("date", current_date())\
+            .writeStream\
+            .queryName(f"staging_{name}")\
             .format("parquet")\
-            .option("path",f"s3a://transactions/{datamart}")\
-            .option("checkpointLocation",f"s3a://checkpoints/{datamart}")\
+            .partitionBy("date")\
+            .option("path", f"s3a://staging/{name}")\
+            .option("checkpointLocation", f"s3a://checkpoints/staging/{name}")\
             .start()
 
 
@@ -108,15 +152,12 @@ def write_to_dlq(df, name):
             .start()
 
 
-def read_kafka_stream(spark, avro_schema_json, name, pk):
-    # value stays binary here (Avro-encoded) -- unlike the old JSON path,
-    # it must NOT be cast to STRING, or the bytes get corrupted.
-    raw_df = spark.readStream\
+def read_kafka_stream(spark, name):
+    # value stays binary (Avro-encoded) -- casting it to STRING corrupts the bytes.
+    return spark.readStream\
         .format("kafka")\
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS) \
         .option("subscribe", f"transactions_streaming.public.{name}") \
         .option("startingOffsets", "earliest") \
         .load()\
-        .select("value")
-
-    return parse_cdc_stream(raw_df, avro_schema_json, name, pk)
+        .select("value", "offset")

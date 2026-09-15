@@ -18,6 +18,7 @@ jars=(
   "https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.6.2/commons-pool2-2.6.2.jar"
   "https://repo1.maven.org/maven2/org/apache/spark/spark-avro_2.12/3.1.3/spark-avro_2.12-3.1.3.jar"
   "https://repo1.maven.org/maven2/org/apache/avro/avro/1.8.2/avro-1.8.2.jar"  # version pinned by Spark 3.1.3's own pom.xml (avro.version property)
+  "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.1_2.12/1.3.1/iceberg-spark-runtime-3.1_2.12-1.3.1.jar"  # last Iceberg release supporting Spark 3.1 (PLAN.md 4.3)
 )
 
 for url in "${jars[@]}"; do

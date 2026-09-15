@@ -7,18 +7,19 @@ from pyspark.sql import SparkSession
 
 from credential import MINIO_ACCESS_KEY, MINIO_SECRET_KEY
 from schema_registry import fetch_latest_schema
-from helper import write_data_to_minio, write_to_kafka, write_to_dlq, read_kafka_stream, add_date_column
+from helper import (
+    ENTITIES,
+    add_date_column,
+    cdc_changes,
+    parse_cdc_stream,
+    read_kafka_stream,
+    write_to_dlq,
+    write_to_kafka,
+    write_to_staging,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("streaming_pipeline")
-
-ENTITIES = [
-    ("users", "user_id"),
-    ("products", "product_id"),
-    ("payments", "payment_id"),
-    ("transactions", "transaction_id"),
-    ("shippings", "shipping_id"),
-]
 
 POLL_INTERVAL_SECONDS = 5
 
@@ -28,7 +29,7 @@ def log_query_started(query):
 
 
 def supervise_entity(name, queries):
-    """Poll one entity's streaming queries (kafka/minio/dlq) for progress and
+    """Poll one entity's streaming queries (kafka/staging/dlq) for progress and
     failures, isolated from the other 4 entities -- so a decode failure on
     this entity's topic (e.g. an Avro schema-drift mismatch, PLAN.md 3.2)
     doesn't take down the other 4. Before this, all 15 queries shared one
@@ -102,12 +103,12 @@ spark = SparkSession\
 entity_threads = []
 for name, pk in ENTITIES:
     avro_schema_json = fetch_latest_schema(f"transactions_streaming.public.{name}")
-    good_df, bad_df = read_kafka_stream(spark, avro_schema_json, name, pk)
-    good_df = add_date_column(good_df)
+    raw_df = read_kafka_stream(spark, name)
+    good_df, bad_df = parse_cdc_stream(raw_df, avro_schema_json, name, pk)
 
     queries = [
-        write_to_kafka(good_df, name, pk),
-        write_data_to_minio(good_df, name),
+        write_to_kafka(add_date_column(good_df), name, pk),
+        write_to_staging(cdc_changes(raw_df, avro_schema_json, pk), name),
         write_to_dlq(bad_df, name),
     ]
     for q in queries:

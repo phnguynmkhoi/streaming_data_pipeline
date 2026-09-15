@@ -12,7 +12,7 @@
       "replication": "1",
       "replicasPerPartition": "1",
       "retentionTimeUnit": "DAYS",
-      "retentionTimeValue": "3",
+      "retentionTimeValue": "2",
       "completionConfig": null,
       "crypterClassName": null,
       "peerSegmentDownloadScheme": null

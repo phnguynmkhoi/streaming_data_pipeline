@@ -35,11 +35,22 @@ if [ $status -ne 0 ]; then
 fi
 
 echo
+echo "== Creating MinIO buckets (idempotent) =="
+for attempt in $(seq 1 20); do
+  if docker exec minio sh -c 'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1 && mc mb --ignore-existing local/checkpoints local/dlq local/staging local/lakehouse'; then
+    break
+  fi
+  sleep 3
+done
+
+echo
 echo "== Waiting for core services =="
 wait_healthy zookeeper 60
 wait_healthy broker 60
 wait_healthy postgres 60
 wait_healthy debezium 90
+wait_healthy iceberg-rest 60
+wait_healthy trino 120
 wait_healthy pinot-controller 60
 wait_healthy pinot-broker 60
 # pinot-server's healthcheck can stay "unhealthy" if a segment is stuck in
