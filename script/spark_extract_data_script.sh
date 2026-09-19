@@ -4,6 +4,8 @@ until docker exec spark-master bin/spark-submit \
   --master spark://spark-master:7077 \
   --deploy-mode client \
   --conf spark.cores.max=2 \
+  --conf spark.sql.streaming.metricsEnabled=true \
+  --conf spark.ui.prometheus.enabled=true \
   --py-files spark-apps/credential.py,spark-apps/schema_registry.py,spark-apps/helper.py \
   spark-apps/extract_data.py; do
   exit_code=$?

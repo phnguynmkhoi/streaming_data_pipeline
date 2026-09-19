@@ -1,0 +1,32 @@
+# JMX exporter rules for Debezium's Kafka Connect worker (PLAN.md 4.1).
+# The status rules are the point: Connect reports connector and task state as
+# JMX *strings*, so they become gauges labelled by state. A connector can sit
+# at RUNNING while its task is FAILED (seen in 3.2), so both are exported.
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+rules:
+  - pattern: 'kafka.connect<type=connector-metrics, connector=(.+)><>status: (.+)'
+    name: kafka_connect_connector_status
+    value: 1
+    labels:
+      connector: "$1"
+      status: "$2"
+    type: GAUGE
+  - pattern: 'kafka.connect<type=connector-task-metrics, connector=(.+), task=(.+)><>status: (.+)'
+    name: kafka_connect_task_status
+    value: 1
+    labels:
+      connector: "$1"
+      task: "$2"
+      status: "$3"
+    type: GAUGE
+  - pattern: kafka.connect<type=source-task-metrics, connector=(.+), task=(.+)><>(source-record-poll-total|source-record-write-total|poll-batch-avg-time-ms)
+    name: kafka_connect_source_task_$3
+    labels:
+      connector: "$1"
+      task: "$2"
+  - pattern: debezium.postgres<type=connector-metrics, context=(.+), server=(.+)><>(MilliSecondsBehindSource|TotalNumberOfEventsSeen|QueueRemainingCapacity)
+    name: debezium_postgres_$3
+    labels:
+      context: "$1"
+      server: "$2"

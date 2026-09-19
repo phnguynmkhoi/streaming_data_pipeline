@@ -1,0 +1,57 @@
+# Prometheus scrape config for the pipeline (PLAN.md 4.1).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # JMX exporter javaagents (script/download_jmx_exporter.sh)
+  - job_name: kafka
+    static_configs:
+      - targets: ['broker:7071']
+  - job_name: debezium
+    static_configs:
+      - targets: ['debezium:7071']
+
+  # Pinot ships its own jmx_prometheus_javaagent; each component uses the
+  # matching bundled config (controller.yml / broker.yml / server.yml).
+  - job_name: pinot
+    static_configs:
+      - targets: ['pinot-controller:8008', 'pinot-broker:8008', 'pinot-server:8008']
+
+  # Spark's built-in PrometheusServlet (spark/metrics.properties). The driver
+  # only exists while the streaming job runs, so its target flaps by design.
+  - job_name: spark
+    metrics_path: /metrics/prometheus
+    static_configs:
+      - targets: ['spark-master:8080', 'worker-a:8080', 'worker-b:8080']
+  - job_name: spark-driver
+    metrics_path: /metrics/prometheus
+    static_configs:
+      - targets: ['spark-master:4040']
+
+  - job_name: trino
+    metrics_path: /metrics
+    # Trino always demands a user identity, even with authentication disabled
+    # ("Basic authentication or X-Trino-User must be sent"), so send one.
+    basic_auth:
+      username: prometheus
+      password: ''
+    static_configs:
+      - targets: ['trino:8080']
+
+  - job_name: minio
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ['minio:9000']

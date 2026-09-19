@@ -1,0 +1,30 @@
+# Template only -- script/render_alertmanager_config.sh fills these in from
+# .env and writes alertmanager.yml next to it (gitignored, since this repo is
+# public and the rendered file holds an SMTP app password). PLAN.md 4.1.
+global:
+  smtp_smarthost: '__SMTP_HOST__:__SMTP_PORT__'
+  smtp_from: '__SMTP_USER__'
+  smtp_auth_username: '__SMTP_USER__'
+  smtp_auth_password: '__SMTP_PASSWORD__'
+  smtp_require_tls: true
+
+route:
+  receiver: email
+  group_by: ['alertname']
+  group_wait: 30s
+  group_interval: 5m
+  # Re-send a still-firing alert at most once a day: this is a laptop stack,
+  # and a nightly repeat is enough to notice something left broken.
+  repeat_interval: 24h
+
+receivers:
+  - name: email
+    email_configs:
+      - to: '__ALERT_EMAIL_TO__'
+        headers:
+          subject: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }} — streaming pipeline'
+        text: |
+          {{ range .Alerts }}{{ .Annotations.summary }}
+          {{ .Annotations.description }}
+          severity: {{ .Labels.severity }}   instance: {{ .Labels.instance }}
+          {{ end }}

@@ -1,0 +1,24 @@
+# JMX exporter rules for the Kafka broker (PLAN.md 4.1). Deliberately narrow:
+# broker health, per-topic throughput, and log end offsets (the basis for
+# judging whether consumers are keeping up -- neither Spark nor Pinot commits
+# consumer-group offsets, so Kafka's own lag metrics don't cover them).
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+rules:
+  - pattern: kafka.server<type=BrokerTopicMetrics, name=(MessagesInPerSec|BytesInPerSec|BytesOutPerSec), topic=(.+)><>Count
+    name: kafka_broker_topic_$1_total
+    labels:
+      topic: "$2"
+    type: COUNTER
+  - pattern: kafka.log<type=Log, name=LogEndOffset, topic=(.+), partition=(.+)><>Value
+    name: kafka_log_end_offset
+    labels:
+      topic: "$1"
+      partition: "$2"
+    type: GAUGE
+  - pattern: kafka.server<type=ReplicaManager, name=(UnderReplicatedPartitions|PartitionCount)><>Value
+    name: kafka_server_$1
+    type: GAUGE
+  - pattern: kafka.controller<type=KafkaController, name=(ActiveControllerCount|OfflinePartitionsCount)><>Value
+    name: kafka_controller_$1
+    type: GAUGE

@@ -26,6 +26,11 @@ wait_healthy() {
   return 1
 }
 
+echo "== Preparing monitoring config (PLAN.md 4.1) =="
+bash script/download_jmx_exporter.sh
+bash script/render_alertmanager_config.sh
+
+echo
 echo "== Starting all containers =="
 docker compose up -d
 status=$?
@@ -98,6 +103,11 @@ done
 
 echo
 echo "== Done =="
+echo "  Grafana    http://localhost:3000 (admin/admin) — dashboards under 'Pipeline'"
+echo "  Prometheus http://localhost:9099/targets"
+echo "  Trino      http://localhost:8088"
+echo "  Control Center / Debezium UI are opt-in: docker compose --profile tools up -d"
+echo
 echo "  Everything is up except the Spark streaming job, which runs in the"
 echo "  foreground so you can see its logs. Start it with:"
 echo "    bash script/spark_extract_data_script.sh"

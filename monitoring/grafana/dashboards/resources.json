@@ -1,0 +1,133 @@
+{
+  "title": "Resources",
+  "uid": "pipeline-resources",
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "30s",
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "JVM heap used % (Kafka, Connect, Pinot)",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "100 * jvm_memory_used_bytes{area=\"heap\"} / jvm_memory_max_bytes{area=\"heap\"}",
+          "legendFormat": "{{job}} {{instance}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "JVM heap used",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "jvm_memory_used_bytes{area=\"heap\"}",
+          "legendFormat": "{{job}} {{instance}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "MinIO usage vs free capacity",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "minio_cluster_usage_total_bytes",
+          "legendFormat": "{{__name__}}",
+          "refId": "A"
+        },
+        {
+          "expr": "minio_cluster_capacity_usable_free_bytes",
+          "legendFormat": "{{__name__}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Trino running queries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "trino_execution_name_QueryManager_RunningQueries",
+          "legendFormat": "running",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Trino free distributed memory",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "trino_memory_type_ClusterMemoryPool_name_general_FreeDistributedBytes",
+          "legendFormat": "free",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

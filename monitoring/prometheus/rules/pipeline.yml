@@ -1,0 +1,55 @@
+# Alert rules (PLAN.md 4.1). Kept deliberately few: each one should mean
+# "something is actually broken", not "a number moved".
+groups:
+  - name: pipeline
+    rules:
+      - alert: TargetDown
+        # spark-driver is excluded: it only exists while the streaming job
+        # runs, so it is legitimately down much of the time.
+        expr: up{job!="spark-driver"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} target {{ $labels.instance }} is down"
+          description: "Prometheus has failed to scrape it for 3 minutes."
+
+      - alert: DebeziumTaskNotRunning
+        # The 3.2 failure mode: the connector reports RUNNING while its task
+        # is FAILED, so CDC silently stops. Alert on the task, not the connector.
+        expr: sum(kafka_connect_task_status{status="running"}) < 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Debezium has no RUNNING task"
+          description: "CDC has stopped. Check GET :8093/connectors/postgres-transactions-connector/status."
+
+      - alert: DebeziumLagging
+        expr: debezium_postgres_millisecondsbehindsource > 300000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Debezium is >5m behind Postgres"
+          description: "Replication slot WAL will keep growing while this persists (see 5.X a)."
+
+      - alert: JvmHeapNearlyFull
+        expr: jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} heap is >90% full"
+          description: "Sustained high heap on {{ $labels.instance }} — the memory-pressure crash mode in 5.2."
+
+      - alert: KafkaCdcTopicStalled
+        # The CDC topics should keep growing while the generator runs. A flat
+        # log end offset means Debezium stopped producing.
+        expr: increase(kafka_log_end_offset{topic=~"transactions_streaming.*"}[15m]) == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No new CDC events on {{ $labels.topic }} for 15m"
+          description: "Expected if the data generator is stopped; otherwise Debezium or Postgres replication is stuck."

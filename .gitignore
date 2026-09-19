@@ -15,3 +15,5 @@ PLAN.md
 CLAUDE.md
 .claude/
 *.log
+monitoring/jmx/*.jar
+monitoring/alertmanager/alertmanager.yml
