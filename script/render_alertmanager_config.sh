@@ -52,5 +52,8 @@ sed -e "s|__SMTP_HOST__|${SMTP_HOST}|g" \
     -e "s|__SMTP_PASSWORD__|${SMTP_PASSWORD}|g" \
     -e "s|__ALERT_EMAIL_TO__|${ALERT_EMAIL_TO}|g" \
     "$TEMPLATE" > "$OUT"
-chmod 600 "$OUT"
+# 644, not 600: the Alertmanager container runs as "nobody" and cannot read
+# a file owned by the host user. The file is gitignored; on a single-user dev
+# machine this is the same exposure as .env itself.
+chmod 644 "$OUT"
 echo "  wrote $OUT"
