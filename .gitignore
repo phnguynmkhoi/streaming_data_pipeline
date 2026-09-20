@@ -17,3 +17,4 @@ CLAUDE.md
 *.log
 monitoring/jmx/*.jar
 monitoring/alertmanager/alertmanager.yml
+scala-app/target/
