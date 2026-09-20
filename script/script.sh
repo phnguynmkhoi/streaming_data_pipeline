@@ -25,7 +25,10 @@ topics=(
 )
 
 for topic in "${topics[@]}"; do
-  docker exec broker kafka-topics --create --if-not-exists \
+  # -e KAFKA_OPTS= : the broker's JMX exporter javaagent (PLAN.md 4.1) is set
+  # via KAFKA_OPTS, which Kafka's CLI tools inherit too -- the agent then fails
+  # to bind its port because the broker already holds it, killing the command.
+  docker exec -e KAFKA_OPTS= broker kafka-topics --create --if-not-exists \
     --topic "$topic" \
     --bootstrap-server localhost:29092 \
     --partitions 1 \

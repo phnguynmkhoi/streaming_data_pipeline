@@ -428,6 +428,30 @@ services:
     networks:
       - streamingnetwork
 
+  superset:
+    image: apache/superset:4.1.1
+    container_name: superset
+    hostname: superset
+    depends_on:
+      - trino
+    ports:
+      - '8089:8088'
+    mem_limit: 1500m
+    environment:
+      # Superset refuses to start on the default key; keep the real one in .env.
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-change-me-in-env}
+      SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER:-admin}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+    volumes:
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./superset/bootstrap.sh:/app/bootstrap.sh:ro
+      - ./superset/assets:/app/assets:ro
+      - superset-home:/app/superset_home
+    command: ["/app/bootstrap.sh"]
+    networks:
+      - streamingnetwork
+
 volumes:
   minio-volume:
   postgres_data:
@@ -435,6 +459,7 @@ volumes:
   prometheus-data:
   alertmanager-data:
   grafana-data:
+  superset-home:
 
 networks:
   streamingnetwork:

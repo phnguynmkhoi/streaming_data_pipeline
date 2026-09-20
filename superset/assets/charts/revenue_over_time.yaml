@@ -1,0 +1,15 @@
+slice_name: Revenue over time
+description: null
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_line
+params: '{"viz_type": "echarts_timeseries_line", "x_axis": "ts", "time_grain_sqla":
+  "P1D", "metrics": ["revenue_sum"], "groupby": [], "row_limit": 10000, "comparison_type":
+  "values", "x_axis_sort_asc": true, "adhoc_filters": []}'
+query_context: null
+cache_timeout: null
+uuid: 33333333-3333-4333-8333-000000000001
+version: 1.0.0
+dataset_uuid: 22222222-2222-4222-8222-000000000001
+is_managed_externally: false
+external_url: null

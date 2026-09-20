@@ -1,0 +1,12 @@
+database_name: Trino
+sqlalchemy_uri: trino://superset@trino:8080/iceberg
+uuid: 11111111-1111-4111-8111-000000000001
+cache_timeout: null
+expose_in_sqllab: true
+allow_run_async: false
+allow_ctas: false
+allow_cvas: false
+allow_dml: false
+extra:
+  allows_virtual_table_explore: true
+version: 1.0.0

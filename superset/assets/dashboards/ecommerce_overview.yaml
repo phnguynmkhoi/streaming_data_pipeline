@@ -1,0 +1,115 @@
+dashboard_title: E-commerce overview
+description: null
+css: null
+slug: ecommerce-overview
+uuid: 44444444-4444-4444-8444-000000000001
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+    - GRID_ID
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    children:
+    - ROW-0
+    - ROW-1
+    parents:
+    - ROOT_ID
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: E-commerce overview
+  ROW-0:
+    type: ROW
+    id: ROW-0
+    children:
+    - CHART-revenue_over_time
+    - CHART-top_products
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  ROW-1:
+    type: ROW
+    id: ROW-1
+    children:
+    - CHART-shipping_status
+    - CHART-payment_methods
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    meta:
+      background: BACKGROUND_TRANSPARENT
+  CHART-revenue_over_time:
+    type: CHART
+    id: CHART-revenue_over_time
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-0
+    meta:
+      uuid: 33333333-3333-4333-8333-000000000001
+      width: 6
+      height: 50
+      chartId: null
+      sliceName: Revenue over time
+  CHART-top_products:
+    type: CHART
+    id: CHART-top_products
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-0
+    meta:
+      uuid: 33333333-3333-4333-8333-000000000002
+      width: 6
+      height: 50
+      chartId: null
+      sliceName: Top products by units sold
+  CHART-shipping_status:
+    type: CHART
+    id: CHART-shipping_status
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-1
+    meta:
+      uuid: 33333333-3333-4333-8333-000000000003
+      width: 6
+      height: 50
+      chartId: null
+      sliceName: Shipping status distribution
+  CHART-payment_methods:
+    type: CHART
+    id: CHART-payment_methods
+    children: []
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-1
+    meta:
+      uuid: 33333333-3333-4333-8333-000000000004
+      width: 6
+      height: 50
+      chartId: null
+      sliceName: Payment method breakdown
+metadata:
+  color_scheme: supersetColors
+  refresh_frequency: 0
+  expanded_slices: {}
+  label_colors: {}
+  cross_filters_enabled: true
+version: 1.0.0
+is_managed_externally: false
+external_url: null
+certified_by: null
+certification_details: null
+published: true
