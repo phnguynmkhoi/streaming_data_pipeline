@@ -51,6 +51,13 @@ scrape_configs:
     static_configs:
       - targets: ['trino:8080']
 
+  # Batch job results (PLAN.md 4.4). honor_labels keeps the pushed job label
+  # instead of relabelling everything to "pushgateway".
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets: ['pushgateway:9091']
+
   - job_name: minio
     metrics_path: /minio/v2/metrics/cluster
     static_configs:

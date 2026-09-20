@@ -53,3 +53,23 @@ groups:
         annotations:
           summary: "No new CDC events on {{ $labels.topic }} for 15m"
           description: "Expected if the data generator is stopped; otherwise Debezium or Postgres replication is stuck."
+
+      - alert: IcebergMergeFailed
+        expr: iceberg_merge_last_exit_code != 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nightly Iceberg merge failed"
+          description: "Staging data is not reaching the lakehouse; run script/run_iceberg_merge.sh and check its output."
+
+      - alert: IcebergMergeStale
+        # Pinot keeps 2 days, the merge runs daily -- 36h without a successful
+        # merge means the serving views are about to develop a gap.
+        expr: time() - iceberg_merge_last_success_timestamp_seconds > 129600
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No successful Iceberg merge in 36h"
+          description: "Keys that aged out of Pinot may be missing from iceberg.serving.* until a merge runs."
