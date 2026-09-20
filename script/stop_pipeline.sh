@@ -3,10 +3,10 @@
 #
 # What "safe" means here: stop the Spark streaming job first (so it isn't
 # killed mid-write to MinIO/Kafka), then bring the stack down without
-# touching volumes, so Postgres (postgres_data) and MinIO (minio-volume)
-# data survive. Kafka/Zookeeper/Pinot have no volumes (see PLAN.md 5.1) and
-# will always come back empty next start — that's a known, separate,
-# already-documented limitation, not something this script changes.
+# touching volumes, so Postgres (postgres_data), MinIO (minio-volume) and
+# Kafka (kafka-data, PLAN.md 5.1) data survive. Zookeeper and Pinot still
+# have no volumes, so Pinot's cluster state comes back empty next start —
+# a known limitation tracked under 5.4, not something this script changes.
 set -u
 cd "$(dirname "$0")/.."
 
@@ -30,26 +30,13 @@ else
   echo "  spark-master container not running, skipping"
 fi
 
-echo "== Dropping Debezium replication slot (if present) =="
-# postgres_data is a persisted volume, so any replication slot Debezium
-# created survives 'docker compose down' — but broker (Kafka) has no volume,
-# so the connector's own state is always wiped on 'down' and re-registered
-# fresh on next start_pipeline.sh. Left alone, that mismatch orphans the slot
-# every cycle: Postgres keeps retaining WAL for a slot nothing is consuming,
-# which grows unbounded while the stack is down. Drop it here, while postgres
-# is still up, so start is always working from a clean slate.
-slot_name=$(grep -m1 '"slot.name"' debezium-connector-postgres.json 2>/dev/null | sed -E 's/.*"slot.name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
-slot_name="${slot_name:-debezium}"
-if docker ps --format '{{.Names}}' | grep -q '^postgres$'; then
-  if docker exec postgres psql -U postgres -tAc "SELECT 1 FROM pg_replication_slots WHERE slot_name='$slot_name'" 2>/dev/null | grep -q 1; then
-    docker exec postgres psql -U postgres -c "SELECT pg_drop_replication_slot('$slot_name');" >/dev/null
-    echo "  dropped replication slot '$slot_name'"
-  else
-    echo "  no '$slot_name' replication slot present, skipping"
-  fi
-else
-  echo "  postgres container not running, skipping"
-fi
+# The Debezium replication slot is deliberately LEFT IN PLACE. It used to be
+# dropped here because the broker had no volume, so Connect's state was wiped
+# on every 'down' and the slot was orphaned. Since PLAN.md 5.1 the broker has
+# a volume: connector offsets survive, and the slot is what retains the WAL
+# they point at. Dropping it now would make Debezium resume from a position
+# Postgres no longer has. Unbounded WAL growth isn't a concern while the stack
+# is down, because Postgres is down too and generates no WAL.
 
 echo
 echo "== Bringing down all containers (volumes preserved) =="
@@ -63,8 +50,9 @@ fi
 
 echo
 echo "== Done =="
-echo "  Preserved (named volumes): Postgres data, MinIO data (parquet/DLQ)."
-echo "  NOT preserved (no volume configured, PLAN.md 5.1): Kafka broker data,"
-echo "  Zookeeper state, Pinot cluster state. On next start you'll need to"
-echo "  re-register the Debezium connector and re-create Pinot schemas/tables"
-echo "  — script/start_pipeline.sh does this for you automatically."
+echo "  Preserved (named volumes): Postgres data, MinIO data (parquet/DLQ),"
+echo "  Kafka topics + Connect offsets (PLAN.md 5.1), and the Debezium"
+echo "  replication slot — so CDC resumes where it left off, no re-snapshot."
+echo "  NOT preserved (no volume): Zookeeper and Pinot cluster state, so Pinot"
+echo "  schemas/tables are re-created on next start (5.4)."
+echo "  — script/start_pipeline.sh handles that for you automatically."

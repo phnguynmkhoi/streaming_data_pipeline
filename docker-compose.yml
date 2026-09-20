@@ -50,6 +50,11 @@ services:
     mem_limit: 1500m
     volumes:
       - ./monitoring/jmx:/opt/jmx:ro
+      # Without this, `docker compose down` wipes every topic plus Connect's
+      # config/offset/status topics: the connector definition is lost and
+      # Debezium re-snapshots from scratch (PLAN.md 5.1). KRaft keeps its
+      # metadata log here too, which is why CLUSTER_ID must stay fixed.
+      - kafka-data:/var/lib/kafka/data
     environment:
       KAFKA_HEAP_OPTS: '-Xmx1g'
       # Prometheus JMX exporter (script/download_jmx_exporter.sh)
@@ -487,6 +492,7 @@ services:
       - streamingnetwork
 
 volumes:
+  kafka-data:
   minio-volume:
   postgres_data:
   iceberg-catalog:
